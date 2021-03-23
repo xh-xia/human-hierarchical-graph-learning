@@ -10,7 +10,7 @@ syntax: glob
 *.xoj
 *.synctex.gz
 *.pyc
-.DS_Store 
+.DS_Store
 *.loa
 *.lof
 *.toc
@@ -19,4 +19,6 @@ syntax: glob
 ignore_this/
 workspace/
 graphs/
+input/
 output/
+__pycache__/
