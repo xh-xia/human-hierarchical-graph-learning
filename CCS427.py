@@ -487,16 +487,16 @@ def rank_eigvals(A, eig_k = None, rtol = 1e-05):
 def saveNclose427(fig, fname, dpi, makedir = True):
     if makedir:
         if dpi is not None:
-            mkdir_p(f"{'png_dpi'}{dpi}")
+            mkdir_p(f"{'output/png_dpi'}{dpi}")
         else: # save both
-            mkdir_p('png_dpi300')
-            mkdir_p('pdf_lossless')
+            mkdir_p('output/png_dpi300')
+            mkdir_p('output/pdf_lossless')
     if dpi is not None:
-        fig.savefig(f"{'png_dpi'}{dpi}{'/'}"+fname+'.png', bbox_inches='tight',dpi=dpi) # auto resize fig to fit titles and such
+        fig.savefig(f"{'output/png_dpi'}{dpi}{'/'}"+fname+'.png', bbox_inches='tight',dpi=dpi) # auto resize fig to fit titles and such
     else: # save both
-        fig.savefig('png_dpi300/'+fname+'.png', bbox_inches='tight',dpi=300) # auto resize fig to fit titles and such
+        fig.savefig('output/png_dpi300/'+fname+'.png', bbox_inches='tight',dpi=300) # auto resize fig to fit titles and such
         # pdf or svg for lossless quality
-        fig.savefig('pdf_lossless/'+fname+'.pdf', bbox_inches='tight') # auto resize fig to fit titles and such
+        fig.savefig('output/pdf_lossless/'+fname+'.pdf', bbox_inches='tight') # auto resize fig to fit titles and such
     fig.clf() # clear figure
     plt.close(fig=fig) # close figure
 
@@ -592,7 +592,7 @@ def save_Masks(GTDict, p, n, regType):
     Sierpinski_dict = dict()
     Sierpinski_dict['A'] = GTDict['A']
     Sierpinski_dict['masks'] = make_level_masks(GTDict)
-    fname = 'npy_files/'
+    fname = 'output/npy_files/'
     mkdir_p(fname)
     fname += 'Sierpinski(regType={:d},p={:d},n={:d})'.format(regType,p,n)
     np.save(fname, Sierpinski_dict)
