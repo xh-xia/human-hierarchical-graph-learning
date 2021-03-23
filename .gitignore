@@ -1,0 +1,21 @@
+syntax: glob
+*.dep
+*.aux
+*.log
+*.blg
+*.dvi
+*.out
+*.bak
+*.swp
+*.xoj
+*.synctex.gz
+*.pyc
+.DS_Store 
+*.loa
+*.lof
+*.toc
+*.lot
+ignore_this/
+workspace/
+graphs/
+output/
