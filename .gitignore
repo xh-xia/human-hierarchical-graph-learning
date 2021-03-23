@@ -15,6 +15,7 @@ syntax: glob
 *.lof
 *.toc
 *.lot
+*trash*
 ignore_this/
 workspace/
 graphs/
