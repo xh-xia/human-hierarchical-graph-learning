@@ -18,14 +18,14 @@ class GLsim:
         'sample_period': every <num of time steps> to record the related matrices from RW
         'A' (nparr): adjacency matrix (if A present, don't use P)
         'P' (nparr): transition prob matrix (if P present, don't use A)
-        'UID': unique id for the current simulation run (i.e., a replica id)
+        'agentID': agent id for the current simulation run (i.e., agent id within group which has same param)
         'beta': shuffling parameter in the vanilla Max-Entropy model
     """
     def __init__(self, params):
         self.seed = params['seed']
         self.steps_tot = params['steps_tot']
         self.sample_period = params['sample_period']
-        self.UID = params['UID']
+        self.agentID = params['agentID']
         self.beta = params['beta']
 
         # set up RNG
