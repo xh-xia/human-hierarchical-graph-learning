@@ -379,7 +379,7 @@ def make_SierpinskiGraph427(p, n, norm = False, regType = 0, use_set=False):
 ''' Andrei simply does this:
 A=A/np.sum(A,1,keepdims=1) # holy cow how simple
 '''
-def W_norm(W,axis=1,self_loop=0): # updated on 2021.3.12 because it was normalized in wrong axis
+def W_norm(W,axis=1,filler=None): # updated on 2021.3.24, much simpler this time
     """
     Args
     -------
@@ -387,14 +387,10 @@ def W_norm(W,axis=1,self_loop=0): # updated on 2021.3.12 because it was normaliz
         when "completely isolated", the vertex in W have self-loop value of 0 and degree 0
         not completely isolated if self-loop!=0 even if the edges to other vertices have 0 weight
     axis (0/1): normalize W along columns/rows (by default 1 because i->j: W[i,j])
-    self_loop: value to replace self_loop when vertex is completely isolated
+    filler: value to replace nan when vertex is completely isolated
     """
-    denom=np.sum(W,axis=axis)
-    bit_arr=denom==0 # bit arr, True if completely isolated (doesn't even have self-loop)
-    denom[bit_arr]=1 # if completely isolated, divide by 1 instead of 0
-    denom=np.repeat([denom],len(denom),axis=0).T if axis==1 else np.repeat([denom],len(denom),axis=0)
-    normed=np.divide(W,denom)
-    if self_loop!=0:
-        ind_arr=np.nonzero(bit_arr) # node indices that are completely isolated
-        normed[ind_arr,ind_arr]=self_loop
+    normed=W/np.sum(W,axis,keepdims=True)
+    # if completely isolated, will produce a row (if axis=1)/column (if axis=0) of nan
+    if filler is not None:
+        normed[normed==np.nan]=filler
     return normed
