@@ -21,4 +21,5 @@ workspace/
 graphs/
 input/
 output/
+sim427/npy_files/
 __pycache__/
