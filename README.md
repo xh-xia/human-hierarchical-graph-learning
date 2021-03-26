@@ -203,3 +203,21 @@ then:
 reset_db.py: change the name of tables to the ones in custom_models.py & config.txt.
 setup_db.py: now we can have raise Exception('Database is not empty!') since if reset_db, db will be empty.
   there may be a thing called schema that limits the change we have on tables.
+
+[heroku debugging]
+Error R10 (Boot timeout): tried to launch app, but failed in 3 min or something, it will kill the process.
+
+database on heroku:
+[bash]
+heroku pg:psql
+\dt # show database table
+SELECT * FROM [table name] # look at specific table
+
+debug on heroku but environment (step-by-step: (heroku exact is for online)
+heroku run bash # heroku.py script is not run, just set up environment
+ls
+cd ./experiment
+1. python -i custom.py # in python environment
+2. psiturk
+   server on
+   debug
