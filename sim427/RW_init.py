@@ -7,35 +7,26 @@ Created: Tuesday, ‎March ‎23, ‎2021, ‏‎6:49:54 PM (EDT)
 """
 
 import signac as sn
-import numpy as np
-from itertools import product
+from RW_utilities import *
+set_dir427() # change cwd to dir that the script is in
 
 project=sn.get_project()
-SEED = 427
-RNG=np.random.default_rng(seed=SEED)
 
-hierDict = dict()
-#hierDict['n'] = [[0],[3],[3,4,5]]
-#hierDict['p'] = [[3],[3,4,5],[3]]
-#hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
-#hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
-hierDict['r'] = [[0,1,2],[3],[3]]
+params = get_params(n_agents=100, key_class='reg_n_p')
 
-key_classes = hierDict.keys()
-n_agents = 10 # num of agents per param (including beta)
-int_max = np.iinfo(int).max # 2147483647 for int (int32 really)
+RNG=np.random.default_rng(seed=params['SEED'])
 
-beta_arr = 10**np.linspace(-3,1,13,endpoint=True)
-range_agents = range(n_agents)
-
-for key_class in key_classes:
-    hierLists = hierDict[key_class]
-    for regType, p, n, beta, agentID in product(hierLists[0],hierLists[1],hierLists[2],beta_arr,range_agents):
+for key_class in params['key_classes']:
+    for regType, p, n in params['pd']:
         fname = 'output/npy_files/'
         fname += 'Sierpinski(regType={:d},p={:d},n={:d}).npy'.format(regType,p,n)
-        seed = RNG.integers(int_max)
-        project.open_job({
-            'key_class':key_class, 'agentID':agentID, 'seed':seed,
-            'steps_tot':steps_tot, 'sample_period':sample_period,
-            'regType':regType, 'p':p, 'n':n, 'beta':beta
-            }).init()
+        for beta_idx in range(len(params['beta_arr'])):
+            for agentID in params['range_agents']:
+                seed = RNG.integers(params['int_max'])
+                project.open_job({
+                    'key_class':key_class, 'seed':seed,
+                    'agentID':agentID, 'n_agents':params['n_agents'],
+                    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
+                    'regType':regType, 'p':p, 'n':n,
+                    'beta':params['beta_arr'][beta_idx], 'beta_idx':beta_idx
+                    }).init()

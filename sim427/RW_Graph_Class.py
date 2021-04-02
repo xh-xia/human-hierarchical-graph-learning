@@ -5,35 +5,57 @@ Created: Monday, ‎March ‎22, ‎2021, ‏‎9:35:55 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
-import numpy as np
+from RW_utilities import *
+
+def load_Sier(regType, p, n, folder_str='npy_files/', return_which='both'):
+    """
+    load transition probability matrix as well as masks
+    onto the arguments <P> and <masks> respectively
+    assume npy_files is contained in sim427 (where this script is at),
+    the npy file contains a dictionary which has two keys:
+    'A' (nparr): transition probability matrix
+    'masks' (dict): [f"{'lv'}{l}"] is a nparr containing mask of level l edge
+    return_which (str): # not implemented
+        'both': returns both 'A' and 'masks'
+        'A': returns 'A'
+        'masks': returns 'masks'
+    """
+    set_dir427()
+    folder_str += 'Sierpinski(regType={:d},p={:d},n={:d}).npy'.format(regType,p,n)
+    try:
+        Sierpinski_dict = np.load(folder_str, allow_pickle=True).tolist() # convert nparr to dict
+    except OSError: # couldn't find the file
+        raise OSError("Oof, doesn't have tarnsition prob matrix to work with.")
+    return Sierpinski_dict['A'], Sierpinski_dict['masks']
+
+def A2P(A, axis=1): # input count matrix, output transition probability
+    denom = np.sum(A,axis,keepdims=True) # sum across column in any sample
+    return np.divide(A,denom,where=(denom!=0)) # if there is no count in that row, keep 0
 
 class GLsim:
     """
     main simulation object (discrete obviously, since we are working with a graph)
     Args
     -------
-    params (dict): dict of parameters
-        'seed': seed for np.random.default_rng
-        'steps_tot': total number of steps of the random walk
-        'sample_period': every <num of time steps> to record the related matrices from RW
-        'A' (nparr): adjacency matrix (if A present, don't use P)
-        'P' (nparr): transition prob matrix (if P present, don't use A)
-        'agentID': agent id for the current simulation run (i.e., agent id within group which has same param)
-        'beta': shuffling parameter in the vanilla Max-Entropy model
+    regType, p, n: regularization type, power, level
+    'seed': seed for np.random.default_rng
+    'steps_tot': total number of steps of the random walk
+    'sample_period': every <num of time steps> to record the related matrices from RW
+    'agentID': agent id for the current simulation run (i.e., agent id within group which has same param)
+    'beta': shuffling parameter in the vanilla Max-Entropy model
     """
-    def __init__(self, params):
-        self.seed = params['seed']
-        self.steps_tot = params['steps_tot']
-        self.sample_period = params['sample_period']
-        self.agentID = params['agentID']
-        self.beta = params['beta']
+    def __init__(self, seed, steps_tot, sample_period, agentID, beta, regType, p, n, **kwargs):
+        self.seed = seed
+        self.steps_tot = steps_tot
+        self.sample_period = sample_period
+        self.agentID = agentID
+        self.beta = beta
+        # load transition prob matrix & masks
+        #self.P, self.masks = load_Sier(regType, p, n)
+        self.P, _ = load_Sier(regType, p, n)
 
         # set up RNG
         self.RNG=np.random.default_rng(seed=self.seed)
-        if params.has_key('A'):
-            self.P=params['A']/np.sum(params['A'],1,keepdims=True) # row-normalize adjacency matrix
-        else:
-            self.P=params['P']
         self.N = self.P.shape[0] # get num of rows to be size of graph
         self.p = 1.0 - np.exp(-self.beta) # p parameter for geometric distribution starting at k=1
         # bunch of initializations
@@ -45,12 +67,13 @@ class GLsim:
         self.path_me[self.steps_now] = self.node_now # start at current node mentally as well
         if self.sample_period > self.steps_tot:
             raise ValueError('<sample_period> larger than <steps_tot>.')
-        self.n_sample = np.floor(self.steps_tot/self.sample_period) # tot num of samples (don't sample at the start)
+        self.n_sample = int(np.floor(self.steps_tot/self.sample_period)) # tot num of samples (don't sample at the start)
         self.steps_sample = np.arange(1,self.n_sample+1) * self.sample_period # time stamps at the time of sampling
         self.count_ma = np.zeros((self.N,self.N),dtype=int) # current count matrix
         self.count_ma_me = np.zeros((self.N,self.N),dtype=int) # current mental count matrix
         self.counts = np.zeros((self.n_sample,self.N,self.N),dtype=int) # tensor: count_ma[i] is count matrix at sample i
         self.counts_me = np.zeros((self.n_sample,self.N,self.N),dtype=int) # ditto except this is mental count
+
     def walk(self):
         """
         walk one step
@@ -75,8 +98,125 @@ class GLsim:
         self.count_ma[self.path[self.steps_now-1],self.path[self.steps_now]] += 1
         self.count_ma_me[self.path_me[self.steps_now-1],self.path_me[self.steps_now]] += 1
         if self.steps_now % self.sample_period == 0: # record count if at sampling point
-            self.counts[self.steps_now/self.sample_period-1,:,:] = self.count_ma
-            self.counts_me[self.steps_now/self.sample_period-1,:,:] = self.count_ma_me
+            self.counts[self.steps_now//self.sample_period-1,:,:] = self.count_ma
+            self.counts_me[self.steps_now//self.sample_period-1,:,:] = self.count_ma_me
+
     def walks(self): # RW on full length
         for k in range(self.steps_tot):
             self.walk()
+        return self.output()
+
+    def output(self):
+        # return a dictionary
+        return {'path':self.path, 'path_me':self.path_me,\
+                'counts_me':self.counts_me, 'steps_sample':self.steps_sample}
+
+def CCS(counts_me, regType, p, n, seed):
+    ''' simplified & modified heavily from CCS_analysis in CCS427.py
+    This function finds CCS for given transition prob matrix
+    It calculates CCS for all P_hat in count_ma_me.
+    Args:
+    -------
+    counts_me (3D np.arr): simulated result
+    regType, p, n: regularization type, power, level
+
+    masks (dict): masks[f"{'lv'}{l}"] is level-l mask for P
+
+    Return:
+    -------
+    CCS_MEANS (2D nparr):
+    since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
+        CCS_MEANS[s,l-1]: CCS at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
+    '''
+    _, masks = load_Sier(regType, p, n)
+    # ↓ convert counts_me into transition prob matrix
+    np.allclose(counts_me,0) # don't ask me why, but this fixes the Ps_me containing nan issue
+    Ps_me = A2P(counts_me, axis=2) # get transition probability matrix from counts
+
+    list_lv = [int(k[2:]) for k in masks.keys()] # list of all levels (e.g., [1,2,3,-1] for load_Sier(3, 3, 3))
+    lv = max(list_lv) # (max) hierarchical level (also the coarsest level)
+
+    CCS_MEANS = np.zeros((Ps_me.shape[0],lv-1))
+    # ↓ calculation
+    for s in range(Ps_me.shape[0]): # s stand for sample
+        mean_weights = [0.0 for i in range(lv)]
+        for l in range(1,lv+1):
+            mean_weights[l-1] = np.sum(Ps_me[s]*masks[f"{'lv'}{l}"]) / np.sum(masks[f"{'lv'}{l}"])
+        #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
+        #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
+        #print("DEBUG mean_weights: {}".format(mean_weights))
+        temp = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+        #print("DEBUG: {} with seed {}".format(mean_weights,seed))
+        for l in range(0,lv-1):
+            CCS_MEANS[s,l] = temp[l]
+
+    return CCS_MEANS
+
+"""
+params = get_params()
+sp={'seed':1023000448, 'agentID':9,
+    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
+    'regType':0, 'p':3, 'n':5,
+    'beta':params['beta_arr'][12], 'beta_idx':12
+    }
+sp={'seed':488714272, 'agentID':8,
+    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
+    'regType':0, 'p':3, 'n':4,
+    'beta':params['beta_arr'][0], 'beta_idx':0
+    }
+print(CCS(GLsim(**sp).walks()['counts_me'],0,3,4,488714272))
+
+# confusing testing of the nan issue...
+# basically it sometimes produces np.nan during normalization of count matrix.
+# I 'fixed' it by adding np.allclose(counts_me,0)
+
+params = get_params()
+sp={'seed':1023000448, 'agentID':9,
+    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
+    'regType':0, 'p':3, 'n':5,
+    'beta':params['beta_arr'][12], 'beta_idx':12
+    }
+
+
+
+def get_count_from_param(dim='2D'):
+    if dim == '2D':
+        return GLsim(**sp).walks()['counts_me'][0]
+    else:
+        return GLsim(**sp).walks()['counts_me']
+
+
+
+def foo(n):
+    denom = np.sum(n,1,keepdims=True)
+    A_hat = np.divide(n,denom,where=(denom!=0)) # get transition probability matrix from counts
+    if np.sum(np.isnan(A_hat))>0:
+        return np.nan
+    else:
+        return 0
+counter_n=0
+counter_n_ref=0
+counter_n_CCS=0
+address_n = set()
+n_ref = get_count_from_param() # get count matrix from simulation; reference
+for i in range(20):
+    n = get_count_from_param() # get count matrix from simulation
+    #np.allclose(n, n_ref) # need this line, otherwise get np.nan, which is the current case
+    #np.allclose(0, n_ref) # or this one
+    #np.allclose(n, 0) # or this
+    if hex(id(n)) in address_n:
+        pass
+    else:
+        address_n.add(hex(id(n)))
+        print('mem address for n: ', hex(id(n))) # only show unique one every loop
+    if hex(id(n_ref)) in address_n:
+        print('n_ref has been used by n in terms of addresses')
+    if np.isnan(foo(n)):
+        counter_n+=1
+    if np.isnan(foo(n_ref)):
+        counter_n_ref+=1
+    if np.isnan(CCS(get_count_from_param(dim='3D'),0,3,5)):
+        counter_n_CCS+=1
+
+print(counter_n, counter_n_ref, counter_n_CCS) # I have 9,9 as the output, meaning 9/20 have nan results.
+"""
