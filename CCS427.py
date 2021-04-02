@@ -6,7 +6,7 @@ from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorb
 from matplotlib.gridspec import GridSpec # for subplots placement manipulation
 
 def main_Sierpinski427():
-    cd427(show=1)
+    cd427(show=True)
     colors = colors_selector(str='5-class Greens')
     beta_arr = np.geomspace(0.0001,10,400)
     hierDict = dict()
@@ -14,10 +14,9 @@ def main_Sierpinski427():
     #hierDict['p'] = [[3],[3,4,5],[3]]
     #hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
     #hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
-    hierDict['r'] = [[0,1,2],[3],[3]]
-
-    stochDict,field_name = load_stoch(folder_str='CCS_stoch_data')
-
+    hierDict['r'] = [[0,1,3],[3],[3]]
+    err_type = 'ste'
+    CCS_stat = load_CCS_stat(fname='CCS_stat_{}_{:d}'.format('reg_n_p',100)) # load simulation results
     for key in hierDict.keys():
         DD = dict() # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
         hierLists = hierDict[key]
@@ -32,7 +31,8 @@ def main_Sierpinski427():
                     Sier = make_Sierpinski427(p, lv, x0 = [0.0,0.0], s0=1.0 , c=1.0, regType = regType)
                     Sier.Layout_Sierpinski427()
                     DD[(regType,p,lv)]['Sier'] = Sier
-        plot_Graph_CCS(DD, beta_arr, key, stochDict=None, colors=colors, regCCS=len(key)>1)
+        plot_Graph_CCS(DD, beta_arr, key, \
+                       CCS_stat=CCS_stat, err_type=err_type, colors=colors, regCCS=len(key)>1)
 
 
 def make_A_hat_beta(A, beta):
@@ -110,7 +110,7 @@ def get_S_kl(n, A, beta_arr, edgeList, lvList, pList=[1,2,3,4], nList=np.arange(
     res['ΔI_n'] = np.diff(res['I_nl'][:,::-1], axis=1)[:,::-1]
     return res
 
-def CCS_analysis(GTDict, beta_arr, A_hat_list = None):
+def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkward dict output into nparr
     '''
     This function finds CCS for all beta in beta_arr.
     But it also finds CCS analytical approximation.
@@ -176,15 +176,16 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None):
     return CCS_dict
 
 def plot_Graph_CCS(DD, beta_arr, key,
-                   stochDict=None, colors=None, regCCS=False):
+                   CCS_stat=None, err_type='ste', colors=None, regCCS=False):
     """
     Args
     --------------
     DD (dict):
-        DD.keys (tuple): (regType,p,lv)
+        DD.keys (tuple): (regType,p,n)
     key (str): those in hierDict.keys()
-    stochDict (dict):
-        same keys as DD; value is nparr (see ax_CCS for description)
+    CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
+        same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
+    err_type (str): type to use as errorbar: 'std' or 'ste'
     colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -203,6 +204,7 @@ def plot_Graph_CCS(DD, beta_arr, key,
     else:
         fname='CCS_' + key
         fig = plt.figure(figsize=[20,9]) # initialize
+
     ds = 0.2 # dummy axes for spacing between the visible plots
     cbW = 1 # colorbar width
     width_ratios = [ds,19,cbW]*3 # ≡[ds,19,cbW,ds,19,cbW,ds,19,cbW]
@@ -218,17 +220,19 @@ def plot_Graph_CCS(DD, beta_arr, key,
             axes['CCS_reg{}'.format(regType)] = [None] * 3
     axes_cb = [None] * 3
     DD_keys = sorted(DD.keys(), reverse=False) # ascending (default)
-    if stochDict is None:
-        stochDict = dict()
-        for key_ in DD_keys:
-            stochDict[key_] = None
+
+    if CCS_stat is not None:
+        n_agents = CCS_stat['mean'][DD_keys[0]][-1,1,0] # since all β have same group size, take 0
+        n_steps = CCS_stat['mean'][DD_keys[0]][-1,2,0] # ditto but w/ walk length
+        fname='CCS_' + key + '_{:.0f}_{:.0f}_{}'.format(n_agents,n_steps,err_type)
+
     if regCCS: # assuming DD_keys has 12 entries
         for i in range(3):
             for regType in [0,1,2,3]:
                 axes['CCS_reg{}'.format(regType)][i] = fig.add_subplot(gs[regType*4:regType*4+3,i*3+1])
                 params = DD_keys[i+3*regType]
                 ax_CCS(axes['CCS_reg{}'.format(regType)][i], beta_arr, DD[params]['CCS_dict'], params, key,\
-                noise=stochDict[params], is_log=True, colors=colors, regCCS=regType)
+                noise=CCS_stat, is_log=True, colors=colors, regCCS=regType)
     else:
         for i in range(3):
             axes['Graph'][i] = fig.add_subplot(gs[0:3,i*3+1])
@@ -237,7 +241,8 @@ def plot_Graph_CCS(DD, beta_arr, key,
             axes['Colorbar'][i] = fig.add_subplot(gs[0:3,i*3+2]) # Edge Type colorbar
             ax_Graph(axes['Graph'][i], axes['Colorbar'][i], fig, params, DD[params]['Sier'].nodeList, DD[params]['GTDict'], colors=colors)
             ax_CCS(axes['CCS'][i], beta_arr, DD[params]['CCS_dict'], params, key,\
-            noise=stochDict[params], is_log=True, colors=colors, regCCS=3)
+                   noise=CCS_stat, err_type=err_type, show_sim_param=i==1,\
+                   is_log=True, colors=colors, regCCS=3)
     # panel label list
     text_labels = ['A', 'B', 'C', 'D'] if regCCS else ['A', 'B']
     for i in range(len(text_labels)):
@@ -249,7 +254,8 @@ def plot_Graph_CCS(DD, beta_arr, key,
     saveNclose427(fig, fname, dpi = None)
 
 def ax_CCS(ax, x, CCS_dict, params, key,
-           noise=None, is_log=True, colors=None, dpi=None, regCCS=None):
+           noise=None, err_type='ste', show_sim_param=False,
+           is_log=True, colors=None, dpi=None, regCCS=None):
     '''
     Args
     --------------
@@ -260,7 +266,9 @@ def ax_CCS(ax, x, CCS_dict, params, key,
         0: default Sierpiński graph
         x: Sierpiński-like graph of type x regularization
     key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
-    noise (2D nparr): noise[i,1:]: beta, lv1 CCS mean, lv1 CCS std, etc.
+    noise (3D nparr): noise[s,i,beta]
+    err_type (str): type to use as errorbar: 'std' or 'ste'
+    show_sim_param (bool): whether we show simulation parameters
     is_log (bool): if True then use log scale on x axis.
     regCCS (int): reusing same var name,
         but in this function = (regCCS+1)th row.
@@ -271,7 +279,7 @@ def ax_CCS(ax, x, CCS_dict, params, key,
     y = CCS_dict['MEANS'] # a dict with keys in <labels>
     labels = CCS_dict['labels']
     cmap = LinearSegmentedColormap.from_list('custom edge color',colors[:len(labels)],N=len(labels))
-    labels.remove(f"{'lv'}{n}{'-'}{n+1}") if len(labels)>n-1 else None # don't show higher level introduced by regularization
+    if len(labels)>n-1: labels.remove(f"{'lv'}{n}{'-'}{n+1}") # don't show higher level introduced by regularization
     xlabel = r'Shuffling Parameter $\beta$'
     ylabel = 'Ratio of Means of Two Consecutive Levels'
     if regType in [0,1,2,3]:
@@ -281,11 +289,20 @@ def ax_CCS(ax, x, CCS_dict, params, key,
         raise ValueError('<regType> is unclear.')
 
     styles = dict(alpha=0.74, linewidth=2)
+    if noise is not None and show_sim_param:
+            styles_txt = dict(fontsize=11,\
+                         horizontalalignment='center',transform=ax.transAxes)
+            n_agents = noise['mean'][params][-1,1,0] # since all β have same group size, take 0
+            n_steps = noise['mean'][params][-1,2,0] # ditto but w/ walk length
+            ax.text(0.5,0.92,'n_agents={:.0f}'.format(n_agents), **styles_txt)
+            ax.text(0.5,0.85,'walk_length={:.0f}'.format(n_steps), **styles_txt)
+            ax.text(0.5,0.78,'errorbar={:s}'.format(err_type), **styles_txt)
     for i in range(len(labels)):
-        ax.plot(x,y[labels[i]],label='Analytical '+labels[i].replace('-','/lv'),color=cmap(i),**styles)
+        ax.plot(x,y[labels[i]],label=labels[i].replace('-','/lv'),color=cmap(i),**styles)
         if noise is not None:
-            ax.errorbar(noise[:,1], noise[:,1+i*2+1], yerr=noise[:,1+i*2+2], \
-                        label='Stochastic '+labels[i].replace('-','/lv'), \
+            ax.errorbar(noise['mean'][params][-1,0,:], noise['mean'][params][-1,3+i,:], \
+                        yerr=noise[err_type][params][-1,3+i,:], \
+                        #label='Stochastic '+labels[i].replace('-','/lv'), \
                         linestyle='None', capsize=4.0, marker=".", markersize=11, \
                         markeredgecolor=cmap(i), markerfacecolor=cmap(i), \
                         ecolor=cmap(i), **styles)
@@ -337,8 +354,14 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
     #scale = 240 / np.log(0.1*(p+n)**n)
     scale = 240 / np.log(0.1*(p+n)**n) - n**2/2
     num_nodes = round(p**n)
-    all_levels = list(set(GTDict['lvList'])) # get all levels, starting from 1, but may end at n+1
-    nu = len(all_levels)
+    all_levels = [x for x in range(1,n+1)] # get all levels, starting from 1, but may end at n+1
+    nu = len(all_levels) # num of all levels minus -1 level
+    if regType==1: # regularized edges are level n+1
+        all_levels.append(n+1)
+        nu += 1
+    elif regType==3: # regularized edges are level -1
+        all_levels.insert(0,-1)
+
 
     if regType in [0,1,2,3]:
         title = 'Sierpiński Graph of ' +\
@@ -501,8 +524,9 @@ def saveNclose427(fig, fname, dpi, makedir = True):
     plt.close(fig=fig) # close figure
 
 
-def cd427(dir_="E:/Lune/Study/Coding/Python3/GL/main427", show=False):
-    import os # working directory management
+def cd427(dir_=None, show=False):
+    import os, inspect # working directory management
+    _cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
     if dir_ is not None:
         if show:
@@ -511,15 +535,13 @@ def cd427(dir_="E:/Lune/Study/Coding/Python3/GL/main427", show=False):
             print("Current cwd after cd: ", os.getcwd())
         else:
             os.chdir(dir_)
-    else: # use the dir_ the script is in
-        dir_ = os.path.abspath(__file__)
-        dir_ = dir_[0:dir_.rfind('\\')] # cut off the '\'+fname to get dir instead of path
+    else: # change current working dir to where the file is
         if show:
             print("Previous cwd: ", os.getcwd())
-            os.chdir(dir_)
+            os.chdir(_cwd)
             print("Current cwd after cd: ", os.getcwd())
         else:
-            os.chdir(dir_)
+            os.chdir(_cwd)
 
 '''
     ########################################
@@ -556,25 +578,13 @@ def colors_selector(str=None, reverse=True):
             colors = ['#','#','#','#','#','#','#']
     return colors[::-1] if reverse else colors
 
-def load_stoch(folder_str='CCS_stoch_data'):
-    folder_str += '/'+'CCS_reg'
-    params = [[0,1,2,3],[3,4,5],[3,4,5]]
-    stochDict, field_name = dict(), dict()
-    for regType in params[0]:
-        for p in params[1]:
-            for lv in params[2]:
-                try:
-                    stochDict[(regType,p,lv)] = np.genfromtxt(\
-                    folder_str+'{}_p{}_n{}.csv'.format(regType,p,lv)\
-                    ,delimiter=',', skip_header=1)
-                    field_name[(regType,p,lv)] = np.genfromtxt(\
-                    folder_str+'{}_p{}_n{}.csv'.format(regType,p,lv)\
-                    ,delimiter=',', max_rows=1, dtype=str)
-                except OSError: # couldn't find the file
-                    stochDict[(regType,p,lv)] = None
-                    field_name[(regType,p,lv)] = None
-    return stochDict, field_name
-
+def load_CCS_stat(fname='CCS_stat'):
+    cd427() # make sure cwd is the one this script is in
+    fname = 'input/' + fname + '.npy'
+    try:
+        return np.load(fname, allow_pickle=True).tolist()
+    except OSError: # couldn't find the file
+        raise OSError("Where is the result from stochastic simulations? (make sure .npy is in 'input' folder)")
 
 def make_level_masks(GTDict):
     """
