@@ -16,7 +16,8 @@ def main_Sierpinski427():
     #hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
     err_type = 'ste'
-    CCS_stat = load_CCS_stat(fname='CCS_stat_{}_{:d}'.format('reg_n_p',100)) # load simulation results
+    CCS_type = 'std' # 'mean' or 'std'
+    CCS_stat = load_CCS_stat(fname='CCS_stat_{}_{}_{:d}'.format(CCS_type,'reg_n_p',100)) # load simulation results
     for key in hierDict.keys():
         DD = dict() # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
         hierLists = hierDict[key]
@@ -27,12 +28,13 @@ def main_Sierpinski427():
                     DD[(regType,p,lv)]['GTDict'] = make_SierpinskiGraph427(p, lv, norm = True, regType = regType)
                     save_Masks(DD[(regType,p,lv)]['GTDict'], p, lv, regType)
                     DD[(regType,p,lv)]['A_hat_list'] = [make_A_hat_beta(DD[(regType,p,lv)]['GTDict']['A'], beta) for beta in beta_arr]
-                    DD[(regType,p,lv)]['CCS_dict'] = CCS_analysis(DD[(regType,p,lv)]['GTDict'], beta_arr, DD[(regType,p,lv)]['A_hat_list'])
+                    DD[(regType,p,lv)]['CCS_arr'] = CCS_analysis(DD[(regType,p,lv)]['GTDict'], beta_arr, DD[(regType,p,lv)]['A_hat_list'])
                     Sier = make_Sierpinski427(p, lv, x0 = [0.0,0.0], s0=1.0 , c=1.0, regType = regType)
                     Sier.Layout_Sierpinski427()
                     DD[(regType,p,lv)]['Sier'] = Sier
         plot_Graph_CCS(DD, beta_arr, key, \
-                       CCS_stat=CCS_stat, err_type=err_type, colors=colors, regCCS=len(key)>1)
+                       CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type, \
+                       colors=colors, regCCS=len(key)>1)
 
 
 def make_A_hat_beta(A, beta):
@@ -122,9 +124,10 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
             None: analytical prediction from Eigen-decomposition (requires beta_arr)
             np.arr: simulated result (vanilla method; doesn't require beta_arr)
     Return:
-        CCS_dict: a dictionary of dictionaries:
-        'MEANS': be it simulated or analytical, they should be the same and exact
-        'labels': keys for the MEANS dict
+        CCS_arr (3D nparr):
+        since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
+            CCS_arr[s,0,l-1]: CCS of means at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
+            CCS_arr[s,1,l-1]: CCS of stds at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
 
     Copy Paste from make_SierpinskiGraph427() documentation:
     edgeList (a list of size-2 tuples (v_i,v_j))
@@ -135,29 +138,34 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
     edgeList, lvList = GTDict['edgeList'], GTDict['lvList']
     n = len(beta_arr) # number of beta (which is also number of graphs)
     lv = max(lvList) # (max) hierarchical level (also the coarsest level)
-    CCS_dict = dict()
-    CCS_dict['MEANS'] = dict()
-    labels = [f"{'lv'}{l}{'-'}{l+1}" for l in range(1,lv)] # key for CCS_dict['MEANS']
-    # ↓ initialization
-    for l in range(0,lv-1): # since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
-        CCS_dict['MEANS'][labels[l]] = [0.0 for i in range(n)]
-    mean_weights=[0.0 for i in range(lv)]
+    CCS_arr = np.zeros((n,2,lv-1)) # since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
     # ↓ calculation
     if A_hat_list is not None:
         for i in range(n):
+            mean_weights = [0.0 for i in range(lv)]
+            std_weights = [0.0 for i in range(lv)]
             for l in range(1,lv+1):
                 b_ = [x==l for x in lvList] # boolean mask
                 b_edgeList = [e for (e, v) in zip(edgeList, b_) if v] # edges in level l
-                mean_weights[l-1] = np.mean([A_hat_list[i][v_i,v_j] for (v_i,v_j) in b_edgeList])
+                temp_list = [A_hat_list[i][v_i,v_j] for (v_i,v_j) in b_edgeList]
+                mean_weights[l-1] = np.mean(temp_list)
+                std_weights[l-1] = np.std(temp_list)
             #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
             #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-            temp = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+            if i == findNearest(beta_arr, 0.3, is_arg = True):
+                print("DEBUG [analytical] mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
+                exit()
+            temp1 = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+            temp2 = np.divide(std_weights[:-1], std_weights[1:]) # ditto, but more explicit
             for l in range(0,lv-1):
-                CCS_dict['MEANS'][labels[l]][i] = temp[l]
+                CCS_arr[i,0,l] = temp1[l]
+                CCS_arr[i,1,l] = temp2[l]
     else:
         eigvals, eigvecs = np.linalg.eigh(GTDict['A'])
         eigvals = np.diag(eigvals) # 𝚲
         for i in range(n):
+            mean_weights = [0.0 for i in range(lv)]
+            std_weights = [0.0 for i in range(lv)]
             EB = np.exp(-beta_arr[i]) # coefficient (e^-β) to find the eigenvalue of learned matrix A_hat
             𝚲_ = (1-EB)*eigvals/(1-EB*eigvals)
             A_hat = eigvecs @ 𝚲_ @ (eigvecs.T) # because A is symmetric (regularized) # for some reason it is all nan when p=3, lv=4
@@ -165,18 +173,22 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
             for l in range(1,lv+1):
                 b_ = [x==l for x in lvList] # boolean mask
                 b_edgeList = [e for (e, v) in zip(edgeList, b_) if v] # edges in level l
-                mean_weights[l-1] = np.mean([A_hat[v_i,v_j] for (v_i,v_j) in b_edgeList])
+                temp_list = [A_hat[v_i,v_j] for (v_i,v_j) in b_edgeList]
+                mean_weights[l-1] = np.mean(temp_list)
+                std_weights[l-1] = np.std(temp_list)
             #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
             #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-            temp = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+            temp1 = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+            temp2 = np.divide(std_weights[:-1], std_weights[1:]) # ditto, but more explicit
             for l in range(0,lv-1):
-                CCS_dict['MEANS'][labels[l]][i] = temp[l]
+                CCS_arr[i,0,l] = temp1[l]
+                CCS_arr[i,1,l] = temp2[l]
 
-    CCS_dict['labels'] = labels
-    return CCS_dict
+    return CCS_arr
 
 def plot_Graph_CCS(DD, beta_arr, key,
-                   CCS_stat=None, err_type='ste', colors=None, regCCS=False):
+                   CCS_stat=None, CCS_type='mean',
+                   err_type='ste', colors=None, regCCS=False):
     """
     Args
     --------------
@@ -186,6 +198,7 @@ def plot_Graph_CCS(DD, beta_arr, key,
     CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
     err_type (str): type to use as errorbar: 'std' or 'ste'
+    CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
     colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -224,15 +237,16 @@ def plot_Graph_CCS(DD, beta_arr, key,
     if CCS_stat is not None:
         n_agents = CCS_stat['mean'][DD_keys[0]][-1,1,0] # since all β have same group size, take 0
         n_steps = CCS_stat['mean'][DD_keys[0]][-1,2,0] # ditto but w/ walk length
-        fname='CCS_' + key + '_{:.0f}_{:.0f}_{}'.format(n_agents,n_steps,err_type)
+        fname='CCS_' + key + '_{:.0f}_{:.0f}_{}_{}'.format(n_agents,n_steps,err_type,CCS_type)
 
     if regCCS: # assuming DD_keys has 12 entries
         for i in range(3):
             for regType in [0,1,2,3]:
                 axes['CCS_reg{}'.format(regType)][i] = fig.add_subplot(gs[regType*4:regType*4+3,i*3+1])
                 params = DD_keys[i+3*regType]
-                ax_CCS(axes['CCS_reg{}'.format(regType)][i], beta_arr, DD[params]['CCS_dict'], params, key,\
-                noise=CCS_stat, is_log=True, colors=colors, regCCS=regType)
+                ax_CCS(axes['CCS_reg{}'.format(regType)][i], beta_arr, DD[params]['CCS_arr'], params, key,\
+                noise=CCS_stat, err_type=err_type, CCS_type=CCS_type, \
+                is_log=True, colors=colors, regCCS=regType)
     else:
         for i in range(3):
             axes['Graph'][i] = fig.add_subplot(gs[0:3,i*3+1])
@@ -240,8 +254,8 @@ def plot_Graph_CCS(DD, beta_arr, key,
             params = DD_keys[i]
             axes['Colorbar'][i] = fig.add_subplot(gs[0:3,i*3+2]) # Edge Type colorbar
             ax_Graph(axes['Graph'][i], axes['Colorbar'][i], fig, params, DD[params]['Sier'].nodeList, DD[params]['GTDict'], colors=colors)
-            ax_CCS(axes['CCS'][i], beta_arr, DD[params]['CCS_dict'], params, key,\
-                   noise=CCS_stat, err_type=err_type, show_sim_param=i==1,\
+            ax_CCS(axes['CCS'][i], beta_arr, DD[params]['CCS_arr'], params, key,\
+                   noise=CCS_stat, err_type=err_type, CCS_type=CCS_type, show_sim_param=i==1,\
                    is_log=True, colors=colors, regCCS=3)
     # panel label list
     text_labels = ['A', 'B', 'C', 'D'] if regCCS else ['A', 'B']
@@ -253,8 +267,8 @@ def plot_Graph_CCS(DD, beta_arr, key,
                      horizontalalignment='center',transform=axlabel.transAxes)
     saveNclose427(fig, fname, dpi = None)
 
-def ax_CCS(ax, x, CCS_dict, params, key,
-           noise=None, err_type='ste', show_sim_param=False,
+def ax_CCS(ax, x, CCS_arr, params, key,
+           noise=None, err_type='ste', CCS_type='mean', show_sim_param=False,
            is_log=True, colors=None, dpi=None, regCCS=None):
     '''
     Args
@@ -266,8 +280,9 @@ def ax_CCS(ax, x, CCS_dict, params, key,
         0: default Sierpiński graph
         x: Sierpiński-like graph of type x regularization
     key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
-    noise (3D nparr): noise[s,i,beta]
+    noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
     err_type (str): type to use as errorbar: 'std' or 'ste'
+    CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
     show_sim_param (bool): whether we show simulation parameters
     is_log (bool): if True then use log scale on x axis.
     regCCS (int): reusing same var name,
@@ -276,10 +291,14 @@ def ax_CCS(ax, x, CCS_dict, params, key,
     if colors is None:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     (regType, p, n) = params
-    y = CCS_dict['MEANS'] # a dict with keys in <labels>
-    labels = CCS_dict['labels']
-    cmap = LinearSegmentedColormap.from_list('custom edge color',colors[:len(labels)],N=len(labels))
-    if len(labels)>n-1: labels.remove(f"{'lv'}{n}{'-'}{n+1}") # don't show higher level introduced by regularization
+    n_level = CCS_arr.shape[2]
+    if CCS_type=='mean':
+        CCS_type_slice = 0
+    else:
+        CCS_type_slice = 1
+    if n_level>n-1:
+        n_level -= 1 # don't show higher level introduced by regularization
+    cmap = LinearSegmentedColormap.from_list('custom edge color',colors[:n_level],N=n_level)
     xlabel = r'Shuffling Parameter $\beta$'
     ylabel = 'Ratio of Means of Two Consecutive Levels'
     if regType in [0,1,2,3]:
@@ -297,8 +316,13 @@ def ax_CCS(ax, x, CCS_dict, params, key,
             ax.text(0.5,0.92,'n_agents={:.0f}'.format(n_agents), **styles_txt)
             ax.text(0.5,0.85,'walk_length={:.0f}'.format(n_steps), **styles_txt)
             ax.text(0.5,0.78,'errorbar={:s}'.format(err_type), **styles_txt)
-    for i in range(len(labels)):
-        ax.plot(x,y[labels[i]],label=labels[i].replace('-','/lv'),color=cmap(i),**styles)
+            ax.text(0.5,0.71,'CCS_type={:s}'.format(CCS_type), **styles_txt)
+    for i in range(n_level): # ↓ first plot analytical curve
+        if False:
+            print('DEBUG: CCS_arr_lv1 - mean {}'.format(CCS_arr[:,0,i]))
+            print('DEBUG: CCS_arr_lv1 - std {}'.format(CCS_arr[:,1,i]))
+            exit()
+        ax.plot(x,CCS_arr[:,CCS_type_slice,i],label=f"{'lv'}{i+1}{'/lv'}{i+2}",color=cmap(i),**styles)
         if noise is not None:
             ax.errorbar(noise['mean'][params][-1,0,:], noise['mean'][params][-1,3+i,:], \
                         yerr=noise[err_type][params][-1,3+i,:], \
@@ -308,8 +332,8 @@ def ax_CCS(ax, x, CCS_dict, params, key,
                         ecolor=cmap(i), **styles)
 
     # argmax = beta that maximizes bottom 3 level diffs (2 diffs)
-    xmax3 = x[np.argmax(y[labels[0]])]; ymax3 = np.max(y[labels[0]])
-    xmax2 = x[np.argmax(y[labels[1]])]; ymax2 = np.max(y[labels[1]])
+    xmax3 = x[np.argmax(CCS_arr[:,CCS_type_slice,0])]; ymax3 = np.max(CCS_arr[:,CCS_type_slice,0])
+    xmax2 = x[np.argmax(CCS_arr[:,CCS_type_slice,1])]; ymax2 = np.max(CCS_arr[:,CCS_type_slice,1])
     text3= '({:.3f},{:.3f})'.format(xmax3,ymax3)
     text2= '({:.3f},{:.3f})'.format(xmax2,ymax2)
     arrowprops=dict(arrowstyle='simple', facecolor='grey', edgecolor='grey', linewidth=1/3, alpha=0.74)
@@ -506,6 +530,22 @@ def rank_eigvals(A, eig_k = None, rtol = 1e-05):
         return (eigvals, eigvecs, l, kth_eigval, kth_eigvec)
     else:
         return (eigvals, eigvecs, l)
+
+def findNearest(arr, val, is_arg = True):
+    ''' # modified from one in Sierpinski_Graph.py
+    Arg:
+        arr (any list like object)
+        val (any number): the value to which one wants to find in arr that is nearest
+        is_arg (bool): if False, return the value instead of argument/index
+    Return:
+        index or value depending on is_arg
+    '''
+    arr_ = np.array(arr) # convert to nparr, make a copy by default
+    ind = np.abs(arr_ - val).argmin()
+    if is_arg:
+        return ind
+    else:
+        return arr[ind]
 
 def saveNclose427(fig, fname, dpi, makedir = True):
     if makedir:

@@ -34,6 +34,11 @@ def main_CCS_stat():
     is_operation = True
     #n_agents, key_class = 10, 'r'
     n_agents, key_class = 100, 'reg_n_p'
+    CCS_type = 'std' # 'mean' or 'std'
+    if CCS_type=='mean':
+        CCS_type_slice = 0
+    else:
+        CCS_type_slice = 1
     project = sn.get_project()
     params = get_params(n_agents=n_agents, key_class=key_class)
     CCS_stat = dict()
@@ -57,7 +62,7 @@ def main_CCS_stat():
                     # CCS_compute here (not as @operation)
                     temp = CCS(job.data['GLsim_data']['counts_me'][:],job.sp.regType,job.sp.p,job.sp.n, job.sp.seed)
             for l in range(n-1): # CCS level index; only up to n-2 (i.e., CCS level n-1)
-                stat_arr[:,l,job.sp.beta_idx,job.sp.agentID] = temp[:,l]
+                stat_arr[:,l,job.sp.beta_idx,job.sp.agentID] = temp[:,CCS_type_slice,l]
                 # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
                 #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
         nparr[:,3:,:] = np.nanmean(stat_arr,axis=3)
@@ -69,7 +74,7 @@ def main_CCS_stat():
     print('Total number of jobs: {:d}'.format(counter))
     fname = 'output/'
     mkdir_p(fname)
-    np.save(fname+'CCS_stat_{}_{:d}'.format(key_class,n_agents), CCS_stat)
+    np.save(fname+'CCS_stat_{}_{}_{:d}'.format(CCS_type,key_class,n_agents), CCS_stat)
 
     return 0
 

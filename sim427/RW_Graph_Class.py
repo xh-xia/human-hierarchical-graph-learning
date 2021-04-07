@@ -111,7 +111,7 @@ class GLsim:
         return {'path':self.path, 'path_me':self.path_me,\
                 'counts_me':self.counts_me, 'steps_sample':self.steps_sample}
 
-def CCS(counts_me, regType, p, n, seed):
+def CCS(counts_me, regType, p, n, seed=0):
     ''' simplified & modified heavily from CCS_analysis in CCS427.py
     This function finds CCS for given transition prob matrix
     It calculates CCS for all P_hat in count_ma_me.
@@ -119,14 +119,14 @@ def CCS(counts_me, regType, p, n, seed):
     -------
     counts_me (3D np.arr): simulated result
     regType, p, n: regularization type, power, level
-
     masks (dict): masks[f"{'lv'}{l}"] is level-l mask for P
 
     Return:
     -------
-    CCS_MEANS (2D nparr):
+    CCS_arr (3D nparr):
     since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
-        CCS_MEANS[s,l-1]: CCS at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
+        CCS_arr[s,0,l-1]: CCS of means at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
+        CCS_arr[s,1,l-1]: CCS of stds at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
     '''
     _, masks = load_Sier(regType, p, n)
     # ↓ convert counts_me into transition prob matrix
@@ -136,23 +136,26 @@ def CCS(counts_me, regType, p, n, seed):
     list_lv = [int(k[2:]) for k in masks.keys()] # list of all levels (e.g., [1,2,3,-1] for load_Sier(3, 3, 3))
     lv = max(list_lv) # (max) hierarchical level (also the coarsest level)
 
-    CCS_MEANS = np.zeros((Ps_me.shape[0],lv-1))
+    CCS_arr = np.zeros((Ps_me.shape[0],2,lv-1))
     # ↓ calculation
     for s in range(Ps_me.shape[0]): # s stand for sample
         mean_weights = [0.0 for i in range(lv)]
+        std_weights = [0.0 for i in range(lv)]
         for l in range(1,lv+1):
-            mean_weights[l-1] = np.sum(Ps_me[s]*masks[f"{'lv'}{l}"]) / np.sum(masks[f"{'lv'}{l}"])
+            mean_weights[l-1] = np.mean(Ps_me[s][np.nonzero(masks[f"{'lv'}{l}"])])
+            std_weights[l-1] = np.std(Ps_me[s][np.nonzero(masks[f"{'lv'}{l}"])])
         #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
         #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-        #print("DEBUG mean_weights: {}".format(mean_weights))
-        temp = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+        print("DEBUG mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
+        temp1 = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
+        temp2 = np.divide(std_weights[:-1], std_weights[1:])
         #print("DEBUG: {} with seed {}".format(mean_weights,seed))
         for l in range(0,lv-1):
-            CCS_MEANS[s,l] = temp[l]
+            CCS_arr[s,0,l] = temp1[l]
+            CCS_arr[s,1,l] = temp2[l]
 
-    return CCS_MEANS
+    return CCS_arr
 
-"""
 params = get_params()
 sp={'seed':1023000448, 'agentID':9,
     'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
@@ -164,7 +167,8 @@ sp={'seed':488714272, 'agentID':8,
     'regType':0, 'p':3, 'n':4,
     'beta':params['beta_arr'][0], 'beta_idx':0
     }
-print(CCS(GLsim(**sp).walks()['counts_me'],0,3,4,488714272))
+CCS(GLsim(**sp).walks()['counts_me'],0,3,4,488714272)
+"""
 
 # confusing testing of the nan issue...
 # basically it sometimes produces np.nan during normalization of count matrix.
