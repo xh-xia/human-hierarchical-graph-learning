@@ -146,7 +146,7 @@ def CCS(counts_me, regType, p, n, seed=0):
             std_weights[l-1] = np.std(Ps_me[s][np.nonzero(masks[f"{'lv'}{l}"])])
         #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
         #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-        print("DEBUG mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
+        #print("DEBUG mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
         temp1 = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
         temp2 = np.divide(std_weights[:-1], std_weights[1:])
         #print("DEBUG: {} with seed {}".format(mean_weights,seed))
@@ -156,6 +156,7 @@ def CCS(counts_me, regType, p, n, seed=0):
 
     return CCS_arr
 
+"""
 params = get_params()
 sp={'seed':1023000448, 'agentID':9,
     'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
@@ -168,7 +169,7 @@ sp={'seed':488714272, 'agentID':8,
     'beta':params['beta_arr'][0], 'beta_idx':0
     }
 CCS(GLsim(**sp).walks()['counts_me'],0,3,4,488714272)
-"""
+
 
 # confusing testing of the nan issue...
 # basically it sometimes produces np.nan during normalization of count matrix.

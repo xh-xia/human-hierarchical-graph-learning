@@ -4,7 +4,8 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 import numpy as np
-from itertools import product, chain
+from itertools import product, chain, repeat
+import concurrent.futures # multiprocessing
 
 def set_dir427(add_parent_to_path=False):
     import os, inspect
