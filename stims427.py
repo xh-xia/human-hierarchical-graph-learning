@@ -7,7 +7,7 @@ from utilities427.Sierpinski427 import p_ary, p2ten, find_CC_node, make_Sierpins
 
 def main():
     cd427(show=1)
-    for regType in [0,1]:
+    for regType in [3]:
         GTDict = make_SierpinskiGraph427(3, 3, norm = False, regType = regType, use_set=True)
         make_Hamiltoniantasks(GTDict, regType = regType)
 
@@ -38,7 +38,7 @@ def make_Hamiltoniantasks(GTDict, regType=1):
         arr3[row,] = make_HierLabels(arr1[row,], GTDict)
         arr4[row,] = random_walk(GTDict['A'], 500)
         arr5[row,] = make_nbackqueries(500)
-    prefix = 'csv_files (regType={:d})'.format(regType)
+    prefix = 'output/csv_files (regType={:d})'.format(regType)
     mkdir_p(prefix)
     np.savetxt(prefix+'/nodes_Hamiltonian'+'.csv', arr1, fmt='%d', delimiter=',')
     np.savetxt(prefix+'/isHamiltonian'+'.csv', arr2, fmt='%d', delimiter=',')
@@ -125,7 +125,7 @@ def Hamiltonian_walk(n, start_node, regType=1): # node_list
 
 def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
     """ [WIP] also Hamiltonian_cycle on Sierpiński graph is non-trivial. Hence WIP.
-    This for now is for Sierpiński graph only, and actually for p=3 only (both regType=0 and 1).
+    This for now is for Sierpiński graph only, and actually for p=3 only (and regType=0,1,3).
     I figured out the cycle myslef.
     Generate a Hamiltonian cycle sequence.
     This is to control for recency
@@ -143,6 +143,7 @@ def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
             0: no regularization of boundary nodes
             1: type 1 regularization (add 1 node)
             2: type 2 regularization (add 1 make_SierpinskiGraph427(p, n-1))
+            3: type 3 regularization (add self-loops to extreme nodes)
         adjacency (bool):
             if true, generate the underlying adjacency matrix
     Return:
@@ -164,7 +165,7 @@ def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
                 clockwise *= -1 # reverse rotation direction
             node_list.append(p2ten(str(1)+str(0)*n, p=p)) # regType=1 extra node
             node_list.append(node_list[0]) # starting node
-        elif regType==0 and n==3: # p=3, n=3, a special case indeed
+        elif regType in [0,3] and n==3: # p=3, n=3, a special case indeed
             # 000 & 001 (002 is for the second last in the cycle)
             node_list.append(p2ten(node_idx, p=p)) # 000
             node_idx = node_idx[0:-1] + str((int(node_idx[-1])+clockwise) % p)
@@ -184,7 +185,7 @@ def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
             node_list.append(2) # 002
             node_list.append(node_list[0]) # starting node 000
         else:
-            raise ValueError("<regType> must be 0 or 1. If 0, <n> has to be 3.")
+            raise ValueError("<regType> must be 0, 1, or 3. If 0 or 3, <n> has to be 3.")
         if adjacency:
             A = np.zeros((round(p**n+1),round(p**n+1)), dtype=int)
             for i in range(len(node_list)-1):
@@ -192,12 +193,13 @@ def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
                 A[node_list[i+1],node_list[i]] = 1 # undirected graph
         return node_list, A
     else:
-        raise ValueError('p!=3 or regType!=1 or 0 is not implemented yet.')
+        raise ValueError('p!=3 or regType not in [0,1,3].')
 
 
 
-def cd427(dir_="E:/Lune/Study/Coding/Python3/GL/main427", show=False):
-    import os # working directory management
+def cd427(dir_=None, show=False):
+    import os, inspect # working directory management
+    _cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 
     if dir_ is not None:
         if show:
@@ -206,15 +208,13 @@ def cd427(dir_="E:/Lune/Study/Coding/Python3/GL/main427", show=False):
             print("Current cwd after cd: ", os.getcwd())
         else:
             os.chdir(dir_)
-    else: # use the dir_ the script is in
-        dir_ = os.path.abspath(__file__)
-        dir_ = dir_[0:dir_.rfind('\\')] # cut off the '\'+fname to get dir instead of path
+    else: # change current working dir to where the file is
         if show:
             print("Previous cwd: ", os.getcwd())
-            os.chdir(dir_)
+            os.chdir(_cwd)
             print("Current cwd after cd: ", os.getcwd())
         else:
-            os.chdir(dir_)
+            os.chdir(_cwd)
 
 def mkdir_p(path_):
     '''creates a directory. equivalent to using mkdir -p on the command line'''
