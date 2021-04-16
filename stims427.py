@@ -11,7 +11,7 @@ def main():
         GTDict = make_SierpinskiGraph427(3, 3, norm = False, regType = regType, use_set=True)
         make_Hamiltoniantasks(GTDict, regType = regType)
 
-def make_Hamiltoniantasks(GTDict, regType=1):
+def make_Hamiltoniantasks(GTDict, regType=3):
     """
     This generates several csv files:
     1. nodes_Hamiltonian.csv: 500x1500
@@ -67,10 +67,10 @@ def make_HierLabels(node_list, GTDict): # np.arr
         HierLabels[i+1] = GTDict['lvList'][GTDict['edgeList'].index({node_list[i],node_list[i+1]})]
     return HierLabels
 
-def make_interspersed_walks(A, walk_length, regType=1): # np.arr
+def make_interspersed_walks(A, walk_length, regType=3): # np.arr
     """
     5x244 RW + 5x56(2x28) = 1500 nodes RW + Hamiltonian Walk (regType=1)
-    5x246 RW + 5x54(2x27) = 1500 nodes RW + Hamiltonian Walk (regType=0)
+    5x246 RW + 5x54(2x27) = 1500 nodes RW + Hamiltonian Walk (regType=0,3)
     """
     isHamiltonian = True
     len_RW = 244 if regType==1 else 246
@@ -123,7 +123,7 @@ def Hamiltonian_walk(n, start_node, regType=1): # node_list
     return node_list
 
 
-def Hamiltonian_cycle(p, n, regType = 1, adjacency=False): # node_list
+def Hamiltonian_cycle(p, n, regType = 3, adjacency=False): # node_list
     """ [WIP] also Hamiltonian_cycle on Sierpiński graph is non-trivial. Hence WIP.
     This for now is for Sierpiński graph only, and actually for p=3 only (and regType=0,1,3).
     I figured out the cycle myslef.

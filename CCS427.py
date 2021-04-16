@@ -15,8 +15,8 @@ def main_Sierpinski427():
     #hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
     #hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
-    err_type = 'ste'
-    CCS_type = 'std' # 'mean' or 'std'
+    err_type = 'std'
+    CCS_type = 'mean' # 'mean' or 'std'
     CCS_stat = load_CCS_stat(fname='CCS_stat_{}_{}_{:d}'.format(CCS_type,'reg_n_p',100)) # load simulation results
     for key in hierDict.keys():
         DD = dict() # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
@@ -152,9 +152,9 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
                 std_weights[l-1] = np.std(temp_list)
             #temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
             #temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-            if i == findNearest(beta_arr, 0.3, is_arg = True):
-                print("DEBUG [analytical] mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
-                exit()
+            # if i == findNearest(beta_arr, 0.3, is_arg = True):
+            #     print("DEBUG [analytical] mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
+            #     exit()
             temp1 = np.divide(mean_weights[:-1], mean_weights[1:]) # ditto, but more explicit
             temp2 = np.divide(std_weights[:-1], std_weights[1:]) # ditto, but more explicit
             for l in range(0,lv-1):
@@ -318,10 +318,9 @@ def ax_CCS(ax, x, CCS_arr, params, key,
             ax.text(0.5,0.78,'errorbar={:s}'.format(err_type), **styles_txt)
             ax.text(0.5,0.71,'CCS_type={:s}'.format(CCS_type), **styles_txt)
     for i in range(n_level): # ↓ first plot analytical curve
-        if False:
-            print('DEBUG: CCS_arr_lv1 - mean {}'.format(CCS_arr[:,0,i]))
-            print('DEBUG: CCS_arr_lv1 - std {}'.format(CCS_arr[:,1,i]))
-            exit()
+        # print('DEBUG: CCS_arr_lv1 - mean {}'.format(CCS_arr[:,0,i]))
+        # print('DEBUG: CCS_arr_lv1 - std {}'.format(CCS_arr[:,1,i]))
+        # exit()
         ax.plot(x,CCS_arr[:,CCS_type_slice,i],label=f"{'lv'}{i+1}{'/lv'}{i+2}",color=cmap(i),**styles)
         if noise is not None:
             ax.errorbar(noise['mean'][params][-1,0,:], noise['mean'][params][-1,3+i,:], \
