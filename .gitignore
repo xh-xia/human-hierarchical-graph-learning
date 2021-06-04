@@ -25,3 +25,4 @@ sim427/npy_files/
 sim427/input/
 sim427/output/
 __pycache__/
+*.code-workspace
