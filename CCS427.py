@@ -1,12 +1,13 @@
 import numpy as np
-from utilities427.Sierpinski427 import *
+from utility427.Sierpinski427 import *
+from utility427.helper427 import set_dir427, mkdir_p
 from stims427 import Hamiltonian_cycle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)
 from matplotlib.gridspec import GridSpec # for subplots placement manipulation
 
 def main_Sierpinski427():
-    cd427(show=True)
+    set_dir427() # make sure cwd is the one this script is in
     colors = colors_selector(str='5-class Greens')
     beta_arr = np.geomspace(0.0001,10,400)
     hierDict = dict()
@@ -563,24 +564,6 @@ def saveNclose427(fig, fname, dpi, makedir = True):
     plt.close(fig=fig) # close figure
 
 
-def cd427(dir_=None, show=False):
-    import os, inspect # working directory management
-    _cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-
-    if dir_ is not None:
-        if show:
-            print("Previous cwd: ", os.getcwd())
-            os.chdir(dir_)
-            print("Current cwd after cd: ", os.getcwd())
-        else:
-            os.chdir(dir_)
-    else: # change current working dir to where the file is
-        if show:
-            print("Previous cwd: ", os.getcwd())
-            os.chdir(_cwd)
-            print("Current cwd after cd: ", os.getcwd())
-        else:
-            os.chdir(_cwd)
 
 '''
     ########################################
@@ -618,7 +601,7 @@ def colors_selector(str=None, reverse=True):
     return colors[::-1] if reverse else colors
 
 def load_CCS_stat(fname='CCS_stat'):
-    cd427() # make sure cwd is the one this script is in
+    set_dir427() # make sure cwd is the one this script is in
     fname = 'input/' + fname + '.npy'
     try:
         return np.load(fname, allow_pickle=True).tolist()
@@ -662,16 +645,6 @@ def cbrLabel427(cax, title):
            , fontsize=11\
            , rotation='vertical')
 
-def mkdir_p(path_):
-    '''creates a directory. equivalent to using mkdir -p on the command line'''
-    from errno import EEXIST
-    from os import makedirs,path # create new directories (i.e., folders)
-    try:
-        makedirs(path_)
-    except OSError as exc:
-        if exc.errno == EEXIST and path.isdir(path_): # if existed, pass
-            pass
-        else: raise
 
 if __name__=="__main__":
     main_Sierpinski427()

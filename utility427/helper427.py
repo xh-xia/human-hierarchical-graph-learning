@@ -1,12 +1,12 @@
 """
-Helper functions.
+Helper functions 427
+
 Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 import numpy as np
 from itertools import product, chain, repeat
 import concurrent.futures  # multiprocessing
-
 
 def set_dir427(add_parent_to_path=False, return_cwd=False):
     import os, inspect
@@ -21,6 +21,19 @@ def set_dir427(add_parent_to_path=False, return_cwd=False):
     if return_cwd:
         return _cwd
 
+
+def mkdir_p(path_):
+    """creates a directory. equivalent to using mkdir -p on the command line"""
+    from errno import EEXIST
+    from os import makedirs, path  # create new directories (i.e., folders)
+
+    try:
+        makedirs(path_)
+    except OSError as exc:
+        if exc.errno == EEXIST and path.isdir(path_):  # if existed, pass
+            pass
+        else:
+            raise
 
 def unique_iter(iter):  # 'tis a generator function to work in tandem with itertools
     UNIQUE = set()

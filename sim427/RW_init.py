@@ -7,7 +7,10 @@ Created: Tuesday, ‎March ‎23, ‎2021, ‏‎6:49:54 PM (EDT)
 """
 
 import signac as sn
-from RW_utilities import *
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
+from utility427.helper427 import get_params, set_dir427
+
 set_dir427() # change cwd to dir that the script is in
 
 project=sn.get_project()

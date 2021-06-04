@@ -3,7 +3,7 @@ This script is to generate .csv files in experiment/stims
 """
 import numpy as np
 import random
-from utilities427.Sierpinski427 import p_ary, p2ten, find_CC_node, make_SierpinskiGraph427, W_norm
+from utility427.Sierpinski427 import p_ary, p2ten, find_CC_node, make_SierpinskiGraph427, W_norm
 
 def main():
     cd427(show=1)

@@ -1,5 +1,5 @@
 import numpy as np
-from utilities427.Sierpinski427 import *
+from utility427.Sierpinski427 import *
 from stims427 import Hamiltonian_cycle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)

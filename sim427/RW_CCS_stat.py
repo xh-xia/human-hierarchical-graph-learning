@@ -1,6 +1,6 @@
 """
-This is to post-process the data from completed jobs in signac database.
-Specifically, those whose CCS_done(job) is True.
+This is to post-process the data from completed jobs in signac database
+Specifically, those whose CCS_done(job) is True
 what it does is simply find basic statistics for the CCS:
 mean, standard deviation, standard error (std/sqrt(sample size))
 Created: Thursday, ‎March ‎25, ‎2021, ‏‎10:30:09 AM (EDT)
@@ -8,10 +8,11 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎10:30:09 AM (EDT)
 """
 
 import signac as sn
-from RW_utilities import *
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
+from utility427.helper427 import get_params, set_dir427, mkdir_p
 from RW_Graph_Class import CCS
 set_dir427(add_parent_to_path=True)
-from CCS427 import mkdir_p
 
 """
 CCS_stat (dict): 3 keys each corresponding to one statistic

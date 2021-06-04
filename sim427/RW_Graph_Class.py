@@ -5,7 +5,9 @@ Created: Monday, ‎March ‎22, ‎2021, ‏‎9:35:55 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
-from RW_utilities import *
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0], ".."))
+from utility427.helper427 import get_params, set_dir427
 
 def load_Sier(regType, p, n, folder_str='npy_files/', return_which='both'):
     """
