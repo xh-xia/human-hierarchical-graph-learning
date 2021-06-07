@@ -1,9 +1,10 @@
 import numpy as np
-from utility427.Sierpinski427 import *
-from stims427 import Hamiltonian_cycle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)
 from matplotlib.gridspec import GridSpec # for subplots placement manipulation
+
+from utility427.Sierpinski427 import *
+from stims427 import Hamiltonian_cycle
 
 def main_Sierpinski427():
     cd427(show=1)
@@ -206,9 +207,9 @@ def CCS_analysis(A_hat_list, GTDict, beta_arr, sim = True, approx = True):
         eigvals = np.diag(eigvals) # 𝚲
         for i in range(n):
             EB = np.exp(-beta_arr[i]) # coefficient (e^-β) to find the eigenvalue of learned matrix A_hat
-            𝚲_ = (1-EB)*eigvals/(1-EB*eigvals)
-            A_hat = eigvecs @ 𝚲_ @ (eigvecs.T) # because A is symmetric (regularized) # for some reason it is all nan when p=3, lv=4
-            #A_hat = eigvecs @ 𝚲_ @ (np.linalg.inv(eigvecs))
+            Lambda = (1-EB)*eigvals/(1-EB*eigvals)
+            A_hat = eigvecs @ Lambda @ (eigvecs.T) # because A is symmetric (regularized) # for some reason it is all nan when p=3, lv=4
+            #A_hat = eigvecs @ Lambda @ (np.linalg.inv(eigvecs))
             for l in range(1,lv+1):
                 b_ = [x==l for x in lvList] # boolean mask
                 b_edgeList = [e for (e, v) in zip(edgeList, b_) if v] # edges in level l
@@ -641,7 +642,7 @@ def plotGraph(regType, p, n, nodeList, GTDict, A=None, beta=None, layoutInd=0\
             axcbr = fig.add_subplot(gs[1,8]) # Edge Type colorbar
             # eig_k specifics
             if eig_k is None:
-                fname = fname[:temp_len] + ' (Vanilla)'.format(eig_k)
+                fname = fname[:temp_len] + ' (Vanilla)'
             else:
                 eigtup = rank_eigvals(A, eig_k)
                 fname = fname[:temp_len] + ' (#{:d} Eigvec)'.format(eig_k)

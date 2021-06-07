@@ -8,10 +8,15 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎10:30:09 AM (EDT)
 """
 
 import signac as sn
+
+from RW_Graph_Class import CCS
+
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
-from utility427.helper427 import get_params, set_dir427, mkdir_p
-from RW_Graph_Class import CCS
+from utility427.helper427 import set_dir427, mkdir_p
+from utility427.math427 import np
+from utility427.sim_params427 import get_params
+
 set_dir427(add_parent_to_path=True)
 
 """
@@ -27,68 +32,88 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     [s,3+n-2,:]: stat of the group having that beta for CCS at level n-1
 """
 
-def print_progress(counter,tot=26000):
-    if counter % 200 == 0: print('Progresss: {}/{}'.format(counter,tot))
+
+def print_progress(counter, tot=26000):
+    if counter % 200 == 0:
+        print("Progresss: {}/{}".format(counter, tot))
+
 
 def main_CCS_stat():
-    #np.seterr(all='raise') # set all runtime warning to raise errors
+    # np.seterr(all='raise') # set all runtime warning to raise errors
     is_operation = True
-    #n_agents, key_class = 10, 'r' # ~ 6 sec
-    n_agents, key_class = 100, 'reg_n_p' # ~ 160 sec
-    CCS_type = 'mean' # 'mean' or 'std'
-    if CCS_type=='mean':
+    # n_agents, key_class = 10, 'r' # ~ 6 sec
+    n_agents, key_class = 100, "reg_n_p"  # ~ 160 sec
+    CCS_type = "mean"  # 'mean' or 'std'
+    if CCS_type == "mean":
         CCS_type_slice = 0
     else:
         CCS_type_slice = 1
     CCS_stat = dict()
-    CCS_stat['mean'], CCS_stat['std'], CCS_stat['ste'] = dict(), dict(), dict()
+    CCS_stat["mean"], CCS_stat["std"], CCS_stat["ste"] = dict(), dict(), dict()
     project = sn.get_project()
     params = get_params(n_agents=n_agents, key_class=key_class)
-    n_sample = int(np.floor(params['steps_tot']/params['sample_period'])) # copied from RW_Graph_Class.py
-    counter = 0 # to report progress
-    for regType, p, n in params['pd']:
-        job_criteria = {'key_class':params['key_classes'][0],'regType':regType,'p':p,'n':n,'n_agents':params['n_agents']}
-        nparr = np.zeros((n_sample,3+n-1,len(params['beta_arr'])))
-        stat_arr = np.zeros((n_sample,n-1,len(params['beta_arr']),params['n_agents']))
+    n_sample = int(
+        np.floor(params["steps_tot"] / params["sample_period"])
+    )  # copied from RW_Graph_Class.py
+    counter = 0  # to report progress
+    for regType, p, n in params["pd"]:
+        job_criteria = {
+            "key_class": params["key_classes"][0],
+            "regType": regType,
+            "p": p,
+            "n": n,
+            "n_agents": params["n_agents"],
+        }
+        nparr = np.zeros((n_sample, 3 + n - 1, len(params["beta_arr"])))
+        stat_arr = np.zeros((n_sample, n - 1, len(params["beta_arr"]), params["n_agents"]))
         for job in project.find_jobs(job_criteria):
-            counter+=1
+            counter += 1
             print_progress(counter)
-            nparr[:,0,job.sp.beta_idx] = job.sp.beta
-            nparr[:,1,job.sp.beta_idx] = params['n_agents']
+            nparr[:, 0, job.sp.beta_idx] = job.sp.beta
+            nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
             with job.data:
-                nparr[:,2,job.sp.beta_idx] = job.data['GLsim_data']['steps_sample'][:]
+                nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
                 if is_operation:
-                    temp = job.data['CCS'][:]
+                    temp = job.data["CCS"][:]
                 else:
                     # CCS_compute here (not as @operation)
-                    temp = CCS(job.data['GLsim_data']['counts_me'][:],job.sp.regType,job.sp.p,job.sp.n, job.sp.seed)
-            for l in range(n-1): # CCS level index; only up to n-2 (i.e., CCS level n-1)
-                stat_arr[:,l,job.sp.beta_idx,job.sp.agentID] = temp[:,CCS_type_slice,l]
+                    temp = CCS(
+                        job.data["GLsim_data"]["counts_me"][:],
+                        job.sp.regType,
+                        job.sp.p,
+                        job.sp.n,
+                        job.sp.seed,
+                    )
+            for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
+                stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
                 # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
                 #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
-        nparr[:,3:,:] = np.nanmean(stat_arr,axis=3)
-        CCS_stat['mean'][(regType,p,n)] = nparr.copy()
-        nparr[:,3:,:] = np.nanstd(stat_arr,axis=3)
-        CCS_stat['std'][(regType,p,n)] = nparr.copy()
-        nparr[:,3:,:] = np.nanstd(stat_arr,axis=3) / np.sqrt(params['n_agents'])
-        CCS_stat['ste'][(regType,p,n)] = nparr.copy()
-    print('Total number of jobs: {:d}'.format(counter))
-    fname = 'output/'
+        nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
+        CCS_stat["mean"][(regType, p, n)] = nparr.copy()
+        nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
+        CCS_stat["std"][(regType, p, n)] = nparr.copy()
+        nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
+        CCS_stat["ste"][(regType, p, n)] = nparr.copy()
+    print("Total number of jobs: {:d}".format(counter))
+    fname = "output/"
     mkdir_p(fname)
-    np.save(fname+'CCS_stat_{}_{}_{:d}'.format(CCS_type,key_class,n_agents), CCS_stat)
+    np.save(fname + "CCS_stat_{}_{}_{:d}".format(CCS_type, key_class, n_agents), CCS_stat)
 
     return 0
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main_CCS_stat()
-    #main_CCS_stat_mp()
+    # main_CCS_stat_mp()
 
 
+# region: multiprocessing (failure: it is much slower)
+import concurrent  # multiprocessing
+from itertools import repeat
 
 
 def CCS_stat_mp_Gwise(CCS_type_slice, project, params, n_sample, graph_type):
-    """ assume is_operation=True
+    """assume is_operation=True
     calculate for a given graph (for multiprocessing purposes)
     since we are going for multiprocessing, the global counter won't work here
     note: this function returns a dictionary of dict as well, but reversed:
@@ -96,28 +121,35 @@ def CCS_stat_mp_Gwise(CCS_type_slice, project, params, n_sample, graph_type):
     e.g., CCS_stat[(regType,p,n)]['std']
     hence the key for CCS_stat is unique for each CCS_stat returned by the function
     """
-    regType, p, n = graph_type # unpacking
+    regType, p, n = graph_type  # unpacking
     CCS_stat = dict()
-    CCS_stat[(regType,p,n)] = dict()
-    job_criteria = {'key_class':params['key_classes'][0],'regType':regType,'p':p,'n':n,'n_agents':params['n_agents']}
-    nparr = np.zeros((n_sample,3+n-1,len(params['beta_arr'])))
-    stat_arr = np.zeros((n_sample,n-1,len(params['beta_arr']),params['n_agents']))
+    CCS_stat[(regType, p, n)] = dict()
+    job_criteria = {
+        "key_class": params["key_classes"][0],
+        "regType": regType,
+        "p": p,
+        "n": n,
+        "n_agents": params["n_agents"],
+    }
+    nparr = np.zeros((n_sample, 3 + n - 1, len(params["beta_arr"])))
+    stat_arr = np.zeros((n_sample, n - 1, len(params["beta_arr"]), params["n_agents"]))
     for job in project.find_jobs(job_criteria):
-        nparr[:,0,job.sp.beta_idx] = job.sp.beta
-        nparr[:,1,job.sp.beta_idx] = params['n_agents']
+        nparr[:, 0, job.sp.beta_idx] = job.sp.beta
+        nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
         with job.data:
-            nparr[:,2,job.sp.beta_idx] = job.data['GLsim_data']['steps_sample'][:]
-            temp = job.data['CCS'][:] # assume @operation
-        for l in range(n-1): # CCS level index; only up to n-2 (i.e., CCS level n-1)
-            stat_arr[:,l,job.sp.beta_idx,job.sp.agentID] = temp[:,CCS_type_slice,l]
-    nparr[:,3:,:] = np.nanmean(stat_arr,axis=3)
-    CCS_stat[(regType,p,n)]['mean'] = nparr.copy()
-    nparr[:,3:,:] = np.nanstd(stat_arr,axis=3)
-    CCS_stat[(regType,p,n)]['std'] = nparr.copy()
-    nparr[:,3:,:] = np.nanstd(stat_arr,axis=3) / np.sqrt(params['n_agents'])
-    CCS_stat[(regType,p,n)]['ste'] = nparr.copy()
+            nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
+            temp = job.data["CCS"][:]  # assume @operation
+        for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
+            stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
+    nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
+    CCS_stat[(regType, p, n)]["mean"] = nparr.copy()
+    nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
+    CCS_stat[(regType, p, n)]["std"] = nparr.copy()
+    nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
+    CCS_stat[(regType, p, n)]["ste"] = nparr.copy()
 
     return CCS_stat
+
 
 def main_CCS_stat_mp():
     """
@@ -131,27 +163,40 @@ def main_CCS_stat_mp():
     It's taking so long I don't even want to wait...
     I canceled it, it did not seem to finish within reasonable time...
     """
-    #n_agents, key_class = 10, 'r' # much slower (~ 35 sec) than sp (single-processing)
-    n_agents, key_class = 100, 'reg_n_p'
-    CCS_type = 'mean' # 'mean' or 'std'
-    if CCS_type=='mean':
+    # n_agents, key_class = 10, 'r' # much slower (~ 35 sec) than sp (single-processing)
+    n_agents, key_class = 100, "reg_n_p"
+    CCS_type = "mean"  # 'mean' or 'std'
+    if CCS_type == "mean":
         CCS_type_slice = 0
     else:
         CCS_type_slice = 1
     CCS_stat = dict()
-    CCS_stat['mean'], CCS_stat['std'], CCS_stat['ste'] = dict(), dict(), dict()
+    CCS_stat["mean"], CCS_stat["std"], CCS_stat["ste"] = dict(), dict(), dict()
     project = sn.get_project()
     params = get_params(n_agents=n_agents, key_class=key_class)
-    n_sample = int(np.floor(params['steps_tot']/params['sample_period'])) # copied from RW_Graph_Class.py
+    n_sample = int(
+        np.floor(params["steps_tot"] / params["sample_period"])
+    )  # copied from RW_Graph_Class.py
     with concurrent.futures.ProcessPoolExecutor() as executor:
-        dict_list = list(executor.map(CCS_stat_mp_Gwise, \
-        repeat(CCS_type_slice),repeat(project),repeat(params),repeat(n_sample),params['pd']))
+        dict_list = list(
+            executor.map(
+                CCS_stat_mp_Gwise,
+                repeat(CCS_type_slice),
+                repeat(project),
+                repeat(params),
+                repeat(n_sample),
+                params["pd"],
+            )
+        )
     # ↓ reverse it back
     for key in CCS_stat.keys():
-        for item in dict_list: # the output after mp is a list of dict, so item is dict
+        for item in dict_list:  # the output after mp is a list of dict, so item is dict
             CCS_stat[key][list(item.keys())[0]] = item[list(item.keys())[0]][key]
-    fname = 'output/'
+    fname = "output/"
     mkdir_p(fname)
-    np.save(fname+'CCS_stat_{}_{}_{:d}'.format(CCS_type,key_class,n_agents), CCS_stat)
+    np.save(fname + "CCS_stat_{}_{}_{:d}".format(CCS_type, key_class, n_agents), CCS_stat)
 
     return 0
+
+
+# endregion

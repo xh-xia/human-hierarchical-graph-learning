@@ -1,10 +1,12 @@
 import numpy as np
-from utility427.Sierpinski427 import *
-from utility427.helper427 import set_dir427, mkdir_p
-from stims427 import Hamiltonian_cycle
 import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)
 from matplotlib.gridspec import GridSpec # for subplots placement manipulation
+
+from utility427.helper427 import set_dir427, mkdir_p
+from utility427.math427 import findNearest, rank_eigvals
+from utility427.Sierpinski427 import *
+from stims427 import Hamiltonian_cycle
 
 def main_Sierpinski427():
     set_dir427() # make sure cwd is the one this script is in
@@ -168,9 +170,9 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
             mean_weights = [0.0 for i in range(lv)]
             std_weights = [0.0 for i in range(lv)]
             EB = np.exp(-beta_arr[i]) # coefficient (e^-β) to find the eigenvalue of learned matrix A_hat
-            𝚲_ = (1-EB)*eigvals/(1-EB*eigvals)
-            A_hat = eigvecs @ 𝚲_ @ (eigvecs.T) # because A is symmetric (regularized) # for some reason it is all nan when p=3, lv=4
-            #A_hat = eigvecs @ 𝚲_ @ (np.linalg.inv(eigvecs))
+            Lambda = (1-EB)*eigvals/(1-EB*eigvals)
+            A_hat = eigvecs @ Lambda @ (eigvecs.T) # because A is symmetric (regularized) # for some reason it is all nan when p=3, lv=4
+            #A_hat = eigvecs @ Lambda @ (np.linalg.inv(eigvecs))
             for l in range(1,lv+1):
                 b_ = [x==l for x in lvList] # boolean mask
                 b_edgeList = [e for (e, v) in zip(edgeList, b_) if v] # edges in level l
@@ -232,7 +234,6 @@ def plot_Graph_CCS(DD, beta_arr, key,
     else:
         for regType in [0,1,2,3]:
             axes['CCS_reg{}'.format(regType)] = [None] * 3
-    axes_cb = [None] * 3
     DD_keys = sorted(DD.keys(), reverse=False) # ascending (default)
 
     if CCS_stat is not None:
@@ -372,12 +373,11 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
     if colors is None:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
     (regType, p, n) = params
-    A = GTDict['A']
     # n is used here to scale node size properly
     #scale = 200 * (5*n**2+4*n)/(2.7**(1.46*n*p/3)-(n*2*(p/3))**2)
     #scale = 240 / np.log(0.1*(p+n)**n)
     scale = 240 / np.log(0.1*(p+n)**n) - n**2/2
-    num_nodes = round(p**n)
+    # num_nodes = round(p**n)
     all_levels = [x for x in range(1,n+1)] # get all levels, starting from 1, but may end at n+1
     nu = len(all_levels) # num of all levels minus -1 level
     if regType==1: # regularized edges are level n+1
@@ -408,8 +408,9 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
             ax.scatter(x,y,zorder=2,**marker_style)
             ax.annotate(str(p_ary(i,p=p,L=n)), xy=(x,y), xytext=(x,y), **annokw)
     # draw edges & Edge Weight Coloring
-    n_ = np.shape(A)[0]
     ''' this is for transition prob edge drawing, which is not used anymore
+    A = GTDict['A']
+    n_ = np.shape(A)[0]
     RGBA = np.zeros((round(n_*(n_-1)/2),4))
     RGBA[:,1] = 0.5 # for green (not sure if this is color 'g')
     counter = 0
@@ -452,100 +453,6 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
     ax.grid(False)
     #plt.legend(loc='upper left')
 
-
-def findNearest(arr, val, is_arg = True):
-    '''
-    Arg:
-        arr (any list like object)
-        val (any number): the value to which one wants to find in arr that is nearest
-        is_arg (bool): if False, return the value instead of argument/index
-    Return:
-        index or value depending on is_arg
-    '''
-    arr_ = np.array(arr) # convert to nparr, make a copy by default
-    ind = np.abs(arr_ - val).argmin()
-    if is_arg:
-        return ind
-    else:
-        return arr[ind]
-
-def getUpperTriangle(W, diag = True, up = True):
-    '''
-    Arg:
-        W (np.arr; (n,n)): if not square matrix, raise ValueError
-        diag (bool): if False, then exclude diagonals (self-loop)
-        up (bool): if False, then use lower triangle instead
-    Return:
-        (Flattened list): e.g., 1,2,3,4,5,6...
-        (including diagonals)
-        up: 1 2 3   down: 1
-              4 5         2 4
-                6         3 5 6
-    '''
-    nrow,ncol = np.shape(W)
-    if nrow != ncol:
-        raise ValueError('<W> is not square.')
-    if up:
-        return [e for list_ in [W[i,i+int(not diag):] for i in range(nrow)] for e in list_]
-    else:
-        return [e for list_ in [W[i+int(not diag):,i] for i in range(nrow)] for e in list_]
-
-
-def rank_eigvals(A, eig_k = None, rtol = 1e-05):
-    '''
-    Return:
-        eigtup = (eigvals, eigvecs, l, kth_eigval, kth_eigvec)
-        ~ or ~
-        eigtup = (eigvals, eigvecs, l)
-        l: ranking of the eigvals (e.g., eigvals=[1,0.7,0.7,0.6] -> [0,1,1,2])
-    '''
-    # per (numpy v1.19) https://numpy.org/doc/stable/reference/generated/numpy.linalg.eigh.html#numpy.linalg.eigh
-    # "The eigenvalues in ascending order, each repeated according to its multiplicity."
-    np.linalg.eigh(A)
-    ''' ↑ ❗ if I run this twice, the 2nd time it will be fine;
-    otherwise will not function if ~ draw 2-panel plot ~ is ran in plotGraph()'''
-    eigvals, eigvecs = np.linalg.eigh(A) # eigenvalues could be repeated (especially for symmetric Graph)
-    eigvals, eigvecs = eigvals[::-1], eigvecs[:,::-1] # descending order
-    n = len(eigvals)
-    l = [0 for i in range(n)]
-    start_idx = 0 # starting index of the repeated value
-    last_rank = 0 # self-explanatory
-    for i in range(1, n):
-        if eigvals[i] < eigvals[i-1] * (1-rtol):
-            l[start_idx:i] = [last_rank] * (i-start_idx)
-            start_idx = i # update starting index after finishing with last largest value
-            last_rank += 1 # update rank to be the current one
-    l[start_idx:] = [last_rank] * (n-start_idx)
-
-    if eig_k is not None:
-        try:
-            idx = l.index(eig_k) # first one that matches
-        except: # can't find eig_k
-            print("Can't find eig_k.")
-            print('is A symmetric? ', np.allclose(A, A.T, rtol=1e-05, atol=1e-08))
-            idx = 0
-        kth_eigval = eigvals[idx]
-        kth_eigvec = eigvecs[:,idx] # nparr; ↓ min-max normalization ↓
-        #kth_eigvec = (kth_eigvec - kth_eigvec.min()) / (kth_eigvec.max() - kth_eigvec.min())
-        return (eigvals, eigvecs, l, kth_eigval, kth_eigvec)
-    else:
-        return (eigvals, eigvecs, l)
-
-def findNearest(arr, val, is_arg = True):
-    ''' # modified from one in Sierpinski_Graph.py
-    Arg:
-        arr (any list like object)
-        val (any number): the value to which one wants to find in arr that is nearest
-        is_arg (bool): if False, return the value instead of argument/index
-    Return:
-        index or value depending on is_arg
-    '''
-    arr_ = np.array(arr) # convert to nparr, make a copy by default
-    ind = np.abs(arr_ - val).argmin()
-    if is_arg:
-        return ind
-    else:
-        return arr[ind]
 
 def saveNclose427(fig, fname, dpi, makedir = True):
     if makedir:

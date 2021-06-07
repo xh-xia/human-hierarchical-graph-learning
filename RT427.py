@@ -74,7 +74,7 @@ def LMM427(df):
 
 def DB_empirical_adjacency(structArr, num=200):
     A = np.zeros((15,15),dtype=np.int32)
-    for i in range(num):
+    for _ in range(num):
         A[structArr['lastnode']-1,structArr['node']-1] = 1
     print(A)
 
