@@ -18,10 +18,14 @@ def is_pos_int(x):
         return True
 
 
-def get_factors(x, neg=False):
+def get_factors(x, neg=False, ub=None):
     """
     find all factors of integer x; not very efficient
-    if neg is True, return negative factors
+
+    Args:
+    -----
+    neg (bool): if True, return negative factors
+    ub (positive int): if present, keep only factors whose abs val <= ub
     """
     if not is_pos_int(x):
         raise TypeError("<x> has to be a positive integer")
@@ -29,16 +33,25 @@ def get_factors(x, neg=False):
         return [1]
     factors = []
     q = x // 2  # q is mid-point (even x) or 0.5 less than mid-point (odd x)
+    range_max = q + 1
+    if ub is not None:
+        if not is_pos_int(ub):
+            raise TypeError("<ub> has to be a positive integer")
+        else:
+            range_max = min(range_max, ub + 1)
     if not neg:
-        for i in range(1, q + 1):
+        for i in range(1, range_max):
             if x % i == 0:
                 factors.append(i)
         factors.append(x)
     else:
-        for i in range(1, q + 1):
+        for i in range(1, range_max):
             if x % i == 0:
                 factors.append(-i)
         factors.append(-x)
+    if ub is not None:
+        if ub < x:
+            factors.pop()
     return factors
 
 
@@ -73,11 +86,6 @@ def step_funct(val_min, val_max, num, steps_tot):
     return np.repeat(arr, [rep] * num)
 
 
-def A2P(A, axis=1):  # input count matrix, output transition probability
-    denom = np.sum(A, axis, keepdims=True)  # sum across column in any sample
-    return np.divide(A, denom, where=(denom != 0))  # if there is no count in that row, keep 0
-
-
 def findNearest(arr, val, is_arg=True):
     """
     Arg:
@@ -93,6 +101,38 @@ def findNearest(arr, val, is_arg=True):
         return ind
     else:
         return arr[ind]
+
+
+# region: linear algebra
+
+"""
+    ########################################
+        W_norm() was originally from NetworkScience.py
+        but it was modifed here.
+    ########################################
+"""
+
+
+def W_norm(W, axis=1, filler=None):  # updated on 2021.3.24, much simpler this time
+    """
+    Args:
+    -----
+    W (np.arr): undirected/directed Weight Matrix, self-loop matters, be cautious
+        when "completely isolated", the vertex in W have self-loop value of 0 and degree 0
+        not completely isolated if self-loop!=0 even if the edges to other vertices have 0 weight
+    axis (0/1): normalize W along columns/rows (by default 1 because i->j: W[i,j])
+    filler: value to replace nan when vertex is completely isolated
+    """
+    normed = W / np.sum(W, axis, keepdims=True)
+    # if completely isolated, will produce a row (if axis=1)/column (if axis=0) of nan
+    if filler is not None:
+        normed[normed == np.nan] = filler
+    return normed
+
+
+def A2P(A, axis=1):  # input count matrix, output transition probability
+    denom = np.sum(A, axis, keepdims=True)  # sum across column in any sample
+    return np.divide(A, denom, where=(denom != 0))  # if there is no count in that row, keep 0
 
 
 def getUpperTriangle(W, diag=True, up=True):
@@ -158,3 +198,6 @@ def rank_eigvals(A, eig_k=None, rtol=1e-05):
         return (eigvals, eigvecs, l, kth_eigval, kth_eigvec)
     else:
         return (eigvals, eigvecs, l)
+
+
+# endregion

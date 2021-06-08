@@ -17,13 +17,14 @@ temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe(
 sys.path.insert(0, temp_cwd)
 from helper427 import unique_iter
 from math427 import get_factors
+sys.path.pop(0) # remove script dir from sys.path
 
 
-def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, key_class="reg_n_p"):
+def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, **kwargs):
     """set up parameters for simulations
 
-    Arg:
-    ----
+    Args:
+    -----
     n_agents (int): num of agents per param (including beta)
     n_beta_constcase (int): num of beta in constant beta case
     var_beta (bool): whether we extend codenames (variable beta case) in "beta_arr"
@@ -51,6 +52,10 @@ def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, key_class="reg_
 
     int_max: 2147483647 for int (int32 really)
     """
+    if "key_class" in kwargs:
+        key_class = kwargs["key_class"]
+    else:
+        raise ValueError("missing 'key_class' key in kwargs")
     params = {
         "key_classes": [key_class],
         "n_agents": n_agents,
@@ -60,12 +65,14 @@ def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, key_class="reg_
         "sample_period": 1500,
         "int_max": np.iinfo(int).max,
         "var_beta": var_beta,
+        "ub": 12,  # upperbound for variable beta (shows up in get_factors())
     }
 
     params["beta_arr"] = 10 ** np.linspace(-3, 1, n_beta_constcase, endpoint=True)
     if var_beta:
         params["beta_arr"] = np.concatenate(
-            [params["beta_arr"], get_factors(params["steps_tot"], neg=True)], axis=None
+            [params["beta_arr"], get_factors(params["steps_tot"], neg=True, ub=params["ub"])],
+            axis=None,
         )
     params["range_agents"] = range(params["n_agents"])
 

@@ -4,8 +4,8 @@ from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorb
 from matplotlib.gridspec import GridSpec # for subplots placement manipulation
 
 from utility427.helper427 import set_dir427, mkdir_p
-from utility427.math427 import findNearest, rank_eigvals
-from utility427.Sierpinski427 import *
+from utility427.math427 import findNearest, rank_eigvals, W_norm
+from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from stims427 import Hamiltonian_cycle
 
 def main_Sierpinski427():

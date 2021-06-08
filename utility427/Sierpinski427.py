@@ -7,6 +7,10 @@ On 2021.1.13 at nearly 5 PM (EST) I moved it here.
 import numpy as np
 from copy import deepcopy
 
+import sys, os, inspect
+temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+sys.path.insert(0, temp_cwd)
+from math427 import W_norm
 
 
 '''
@@ -370,27 +374,4 @@ def make_SierpinskiGraph427(p, n, norm = False, regType = 0, use_set=False):
         A = W_norm(A)
     return dict(A=A, edgeList=edgeList, lvList=lvList, n=n)
 
-'''
-    ########################################
-        NetworkScience.py
-        But I changed the functions a bit here.
-    ########################################
-'''
-''' Andrei simply does this:
-A=A/np.sum(A,1,keepdims=1) # holy cow how simple
-'''
-def W_norm(W,axis=1,filler=None): # updated on 2021.3.24, much simpler this time
-    """
-    Args
-    -------
-    W (nparr): undirected/directed Weight Matrix, self-loop matters, be cautious
-        when "completely isolated", the vertex in W have self-loop value of 0 and degree 0
-        not completely isolated if self-loop!=0 even if the edges to other vertices have 0 weight
-    axis (0/1): normalize W along columns/rows (by default 1 because i->j: W[i,j])
-    filler: value to replace nan when vertex is completely isolated
-    """
-    normed=W/np.sum(W,axis,keepdims=True)
-    # if completely isolated, will produce a row (if axis=1)/column (if axis=0) of nan
-    if filler is not None:
-        normed[normed==np.nan]=filler
-    return normed
+

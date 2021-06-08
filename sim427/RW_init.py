@@ -18,8 +18,15 @@ set_dir427()  # change cwd to script dir
 
 project = sn.get_project()
 
+"""
+reg_n_p: 20 cases of combination from:
+    hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]] = 12
+    hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]] = 8 (excluding those in reg_n)
+implemented variable beta case: with num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
+"""
 params4params = {"n_agents": 10, "n_beta_constcase": 13, "var_beta": True, "key_class": "reg_n_p"}
 params = get_params(**params4params)
+
 
 RNG = np.random.default_rng(seed=params["SEED"])
 

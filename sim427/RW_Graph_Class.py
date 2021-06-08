@@ -12,7 +12,7 @@ from utility427.math427 import step_funct, A2P, np
 from utility427.sim_params427 import get_params
 
 
-def load_Sier(regType, p, n, folder_str="npy_files/", return_which="both"):
+def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
     """
     load transition probability matrix as well as masks
     onto the arguments <P> and <masks> respectively

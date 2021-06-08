@@ -8,6 +8,20 @@ from flow import FlowProject  # signac-flow library
 
 import RW_Graph_Class
 
+"""in command line (in sim427 dir):
+[check status]
+    python RW_jobs.py status
+
+[to run jobs]
+    :: -o RW_run           | run only RW_run operation
+    :: --ignore-conditions all  | {none,pre,post,all} config eligibility of jobs to run
+    :: --progress               | show progress bar
+    :: CCS_compute has pre cond of RW_done (i.e., RW_run operation has to be done first)
+    python RW_jobs.py run -o RW_run --ignore-conditions none --progress
+    python RW_jobs.py run -o CCS_compute --ignore-conditions none --progress
+    :: or run both in one line
+    python RW_jobs.py run --ignore-conditions none --progress
+"""
 
 class Project(FlowProject):
     pass
