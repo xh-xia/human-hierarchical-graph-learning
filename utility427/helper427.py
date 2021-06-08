@@ -6,7 +6,7 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
 """
 
 
-def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=False):
+def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=False, depth=1):
     """change working dir
 
     Args:
@@ -20,11 +20,13 @@ def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=False):
                 which is where this function is called by import
                 (because helper427.py should never be run directly, but imported,
                 the 1-step outer frame should be in those scripts that imported helper427.py.)
+    depth (int): how many outer frames away from caller
+        i.e., how many calls below the top of the stack
     """
     import sys, os, inspect
 
     if dir_ is None:
-        _cwd = os.path.dirname(os.path.abspath(inspect.getfile(sys._getframe(1))))
+        _cwd = os.path.dirname(os.path.abspath(inspect.getfile(sys._getframe(depth))))
         # below is the caller, which is always script dir for helper427.py
         # _cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
     else:
@@ -37,18 +39,56 @@ def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=False):
         return _cwd
 
 
-def mkdir_p(path_):
+def mkdir_p(dir_):
     """creates a directory. equivalent to using mkdir -p on the command line"""
     from errno import EEXIST
     from os import makedirs, path  # create new directories (i.e., folders)
 
     try:
-        makedirs(path_)
+        makedirs(dir_)
     except OSError as exc:
-        if exc.errno == EEXIST and path.isdir(path_):  # if existed, pass
+        if exc.errno == EEXIST and path.isdir(dir_):  # if existed, pass
             pass
         else:
             raise
+
+
+def get_params(params=None, fname="params"):
+    """parameter management | return a dict
+
+    assume the parameter file is in script dir of running script + "\\input"
+    it will either:
+    1) create a json file named f"{fname}.json" from params if it doesn't exist
+    2) read a json file named f"{fname}.json" if it exists
+    either way, it will return a dictionary (params if 1), dictionary created from json if 2))
+
+    NOTE
+    ----
+    params.json file should be pure json w/o comments |
+    comments should be written in scripts where either
+    - get_params() is called
+    - or the object get_params() returns is processed
+    """
+    import json
+
+    dir_ = set_dir427(return_cwd=True, depth=2) + "\\input\\"
+    mkdir_p(dir_)  # create folder if it doesn't exist
+    dir_ += fname + ".json"  # full absolute path of the json file
+
+    try:
+        with open(dir_) as f:
+            json_dict = json.load(f)  # 'tis a dict
+    except FileNotFoundError:  # 1) we create json from params or just (almost) empty json
+        with open(dir_, "w") as f_out:
+            if params is not None:
+                json.dump(params, f_out, indent=4)
+            else:
+                json.dump(dict(), f_out, indent=4)
+        return params
+    except:
+        raise
+    else:  # 2) json loads just fine; so we (have) read json into a dict
+        return json_dict
 
 
 def unique_iter(iter_):  # 'tis a generator function to work in tandem with itertools

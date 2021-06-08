@@ -9,7 +9,6 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 from utility427.helper427 import set_dir427
 from utility427.math427 import step_funct, A2P, np
-from utility427.sim_params427 import get_params
 
 
 def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
@@ -203,73 +202,3 @@ def CCS(counts_me, regType, p, n, seed=0):
 
     return CCS_arr
 
-
-"""
-params = get_params()
-sp={'seed':1023000448, 'agentID':9,
-    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
-    'regType':0, 'p':3, 'n':5,
-    'beta':params['beta_arr'][12], 'beta_idx':12
-    }
-sp={'seed':488714272, 'agentID':8,
-    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
-    'regType':0, 'p':3, 'n':4,
-    'beta':params['beta_arr'][0], 'beta_idx':0
-    }
-CCS(GLsim(**sp).walks()['counts_me'],0,3,4,488714272)
-
-
-# confusing testing of the nan issue...
-# basically it sometimes produces np.nan during normalization of count matrix.
-# I 'fixed' it by adding np.allclose(counts_me,0)
-
-params = get_params()
-sp={'seed':1023000448, 'agentID':9,
-    'steps_tot':params['steps_tot'], 'sample_period':params['sample_period'],
-    'regType':0, 'p':3, 'n':5,
-    'beta':params['beta_arr'][12], 'beta_idx':12
-    }
-
-
-
-def get_count_from_param(dim='2D'):
-    if dim == '2D':
-        return GLsim(**sp).walks()['counts_me'][0]
-    else:
-        return GLsim(**sp).walks()['counts_me']
-
-
-
-def foo(n):
-    denom = np.sum(n,1,keepdims=True)
-    A_hat = np.divide(n,denom,where=(denom!=0)) # get transition probability matrix from counts
-    if np.sum(np.isnan(A_hat))>0:
-        return np.nan
-    else:
-        return 0
-counter_n=0
-counter_n_ref=0
-counter_n_CCS=0
-address_n = set()
-n_ref = get_count_from_param() # get count matrix from simulation; reference
-for i in range(20):
-    n = get_count_from_param() # get count matrix from simulation
-    #np.allclose(n, n_ref) # need this line, otherwise get np.nan, which is the current case
-    #np.allclose(0, n_ref) # or this one
-    #np.allclose(n, 0) # or this
-    if hex(id(n)) in address_n:
-        pass
-    else:
-        address_n.add(hex(id(n)))
-        print('mem address for n: ', hex(id(n))) # only show unique one every loop
-    if hex(id(n_ref)) in address_n:
-        print('n_ref has been used by n in terms of addresses')
-    if np.isnan(foo(n)):
-        counter_n+=1
-    if np.isnan(foo(n_ref)):
-        counter_n_ref+=1
-    if np.isnan(CCS(get_count_from_param(dim='3D'),0,3,5)):
-        counter_n_CCS+=1
-
-print(counter_n, counter_n_ref, counter_n_CCS) # I have 9,9 as the output, meaning 9/20 have nan results.
-"""

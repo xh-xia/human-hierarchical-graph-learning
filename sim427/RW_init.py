@@ -10,9 +10,9 @@ import signac as sn
 
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
-from utility427.helper427 import set_dir427
+from utility427.helper427 import set_dir427, get_params
 from utility427.math427 import np
-from utility427.sim_params427 import get_params
+from utility427.sim_params427 import make_sim_params
 
 set_dir427()  # change cwd to script dir
 
@@ -24,9 +24,7 @@ reg_n_p: 20 cases of combination from:
     hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]] = 8 (excluding those in reg_n)
 implemented variable beta case: with num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
 """
-params4params = {"n_agents": 10, "n_beta_constcase": 13, "var_beta": True, "key_class": "reg_n_p"}
-params = get_params(**params4params)
-
+params = make_sim_params(get_params())  # load params.json as dict, use it to create sim params
 
 RNG = np.random.default_rng(seed=params["SEED"])
 

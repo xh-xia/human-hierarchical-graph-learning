@@ -17,21 +17,32 @@ temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe(
 sys.path.insert(0, temp_cwd)
 from helper427 import unique_iter
 from math427 import get_factors
-sys.path.pop(0) # remove script dir from sys.path
+
+sys.path.pop(0)  # remove script dir from sys.path
 
 
-def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, **kwargs):
+def make_sim_params(params):
     """set up parameters for simulations
 
-    Args:
-    -----
-    n_agents (int): num of agents per param (including beta)
-    n_beta_constcase (int): num of beta in constant beta case
-    var_beta (bool): whether we extend codenames (variable beta case) in "beta_arr"
+    Arg - params (dict):
+    --------------------
+    NOTE: params should be read from params.json file, which should be pure json w/o comments
+    - key_classes (list): list of key_class (currently only uses first entry)
+        - key_class (str): type of simulation run; encoding regType, p, n parameters
+            e.g., "reg_n_p", "r"
+    - n_agents (int): num of agents per param (including beta)
+    - n_beta_constcase (int): num of beta in constant beta case
+    - SEED (int): seed for current simulation params
+    - steps_tot (int): total number of steps for random walk
+    - sample_period (int): sample sim results every <sample_period> steps
+    - var_beta (bool): whether we extend codenames (variable beta case) in "beta_arr"
+    - ub (int): upperbound for variable beta (shows up in get_factors())
 
     Intermediate Variables:
     -----------------------
-    beta_arr (np.arr): e.g., [0.01, 0.1, 1,| -1, -2, -3]
+    - params["pd"] (iter): reg, n, p tuple iterator
+    - params["int_max"] (int32): some constant, in this case 2147483647 for int (int32 really)
+    - params["beta_arr"] (np.arr): e.g., [0.01, 0.1, 1,| -1, -2, -3]
                             (constant case)|(variable case)
         1D arr of beta values (constant beta case)
         also incorporates variable beta case (mono-increase step function w/ certain <sf_width>)
@@ -49,27 +60,12 @@ def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, **kwargs):
             NOTE: since x has to be positive integer, put alongside float beta (const case),
                   the negative beta (var case) will be float as well;
                   so when extracting codenames (var case), use round(-x) to get original int first
-
-    int_max: 2147483647 for int (int32 really)
+    - params["range_agents"] (range object): range(params["n_agents"])
     """
-    if "key_class" in kwargs:
-        key_class = kwargs["key_class"]
-    else:
-        raise ValueError("missing 'key_class' key in kwargs")
-    params = {
-        "key_classes": [key_class],
-        "n_agents": n_agents,
-        "n_beta_constcase": n_beta_constcase,
-        "SEED": 427,
-        "steps_tot": 3000,
-        "sample_period": 1500,
-        "int_max": np.iinfo(int).max,
-        "var_beta": var_beta,
-        "ub": 12,  # upperbound for variable beta (shows up in get_factors())
-    }
+    params["int_max"] = np.iinfo(int).max
 
-    params["beta_arr"] = 10 ** np.linspace(-3, 1, n_beta_constcase, endpoint=True)
-    if var_beta:
+    params["beta_arr"] = 10 ** np.linspace(-3, 1, params["n_beta_constcase"], endpoint=True)
+    if params["var_beta"]:
         params["beta_arr"] = np.concatenate(
             [params["beta_arr"], get_factors(params["steps_tot"], neg=True, ub=params["ub"])],
             axis=None,
@@ -79,10 +75,10 @@ def get_params(n_agents=10, n_beta_constcase=13, var_beta=False, **kwargs):
     hierDict = dict()
     hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]]
-    if key_class == "reg_n_p":
+    if params["key_classes"][0] == "reg_n_p":
         params["pd"] = unique_iter(
             chain.from_iterable([product(*hierDict["reg_n"]), product(*hierDict["reg_p"])])
         )
-    elif key_class == "r":
+    elif params["key_classes"][0] == "r":
         params["pd"] = product([0, 1, 2, 3], [3], [3])
     return params
