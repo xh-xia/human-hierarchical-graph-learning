@@ -58,14 +58,14 @@ def get_factors(x, neg=False, ub=None):
 def step_funct(val_min, val_max, num, steps_tot):
     """generate a list of vals (for discrete step functions)
 
-    Args:
-    -----
+    Args
+    ----
     num (int): number of steps, each with a unique val
     steps_tot (int): number of total steps;
         has to be int multiple of <num> (i.e., <num> has to be a factor of <steps_tot>)
 
-    Intermidiate:
-    -------------
+    Intermediary
+    ------------
     if num=1, only return [val_min] * steps_tot
     else:
         rep = steps_tot // num (quotient)

@@ -6,7 +6,7 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
 """
 
 
-def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=False, depth=1):
+def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=True, depth=1):
     """change working dir
 
     Args:
@@ -71,7 +71,7 @@ def get_params(params=None, fname="params"):
     """
     import json
 
-    dir_ = set_dir427(return_cwd=True, depth=2) + "\\input\\"
+    dir_ = set_dir427(depth=2) + "\\input\\"
     mkdir_p(dir_)  # create folder if it doesn't exist
     dir_ += fname + ".json"  # full absolute path of the json file
 

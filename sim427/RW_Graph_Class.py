@@ -40,16 +40,16 @@ class GLsim:
     """
     main simulation object (discrete obviously, since we are working with a graph)
 
-    Args:
-    -----
+    Args
+    ----
     regType, p, n: regularization type, power, level
     seed: seed for np.random.default_rng()
     steps_tot: total number of steps of the random walk
     sample_period: every <num of time steps> to record the related matrices from RW
     agentID: agent id for the current run (i.e., agent id within group which has same param)
 
-    Intermidiate Vars:
-    ------------------
+    Intermediary
+    ------------
     self.beta (num, list-like): shuffling parameter in the vanilla Max-Entropy model
         NOTE: this also applies to beta (arg) if kwargs['var_beta'] is False or KeyError
         np.random.default_rng.geometric():

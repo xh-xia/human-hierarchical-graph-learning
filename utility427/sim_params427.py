@@ -17,15 +17,14 @@ temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe(
 sys.path.insert(0, temp_cwd)
 from helper427 import unique_iter
 from math427 import get_factors
-
 sys.path.pop(0)  # remove script dir from sys.path
 
 
 def make_sim_params(params):
     """set up parameters for simulations
 
-    Arg - params (dict):
-    --------------------
+    Arg - params (dict)
+    -------------------
     NOTE: params should be read from params.json file, which should be pure json w/o comments
     - key_classes (list): list of key_class (currently only uses first entry)
         - key_class (str): type of simulation run; encoding regType, p, n parameters
@@ -38,8 +37,8 @@ def make_sim_params(params):
     - var_beta (bool): whether we extend codenames (variable beta case) in "beta_arr"
     - ub (int): upperbound for variable beta (shows up in get_factors())
 
-    Intermediate Variables:
-    -----------------------
+    Intermediary
+    ------------
     - params["pd"] (iter): reg, n, p tuple iterator
     - params["int_max"] (int32): some constant, in this case 2147483647 for int (int32 really)
     - params["beta_arr"] (np.arr): e.g., [0.01, 0.1, 1,| -1, -2, -3]

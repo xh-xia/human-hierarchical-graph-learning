@@ -96,7 +96,7 @@ def main_CCS_stat():
         nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
         CCS_stat["ste"][(regType, p, n)] = nparr.copy()
     print(f"Total number of jobs: {counter}")
-    fname = set_dir427(return_cwd=True) + "\\output\\"
+    fname = set_dir427() + "\\output\\"
     mkdir_p(fname)
     fname += "CCS_stat_{}_{}_{:d}".format(CCS_type, params["key_classes"][0], params["n_agents"])
     np.save(fname, CCS_stat)

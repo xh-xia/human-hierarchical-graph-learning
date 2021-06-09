@@ -27,7 +27,7 @@ def main():
     """
     which_db = 12  # which database we want to parse
     ver = "25.427"
-    cwd = set_dir427(return_cwd=True)
+    cwd = set_dir427()
     folder_path = "\\input\\database\\"
     csvs = ["experiment", "participants", "walkdata"]
     df_dict = dict()
@@ -661,7 +661,7 @@ def save_df_to_csv(df, folder_name, fname, show_df=False):
     """
     if show_df:
         print(f"DEBUG df:\n{df}")
-    dir_ = set_dir427(return_cwd=True) + f"\\output\\{folder_name}\\"
+    dir_ = set_dir427() + f"\\output\\{folder_name}\\"
     mkdir_p(dir_)  # creates output\<folder_name> folder if it doesn't exist
     dir_ += fname + ".csv"
     df.to_csv(dir_, sep=",", quotechar='"')  # save to csv file

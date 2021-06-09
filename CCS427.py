@@ -1,10 +1,15 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize, LinearSegmentedColormap # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)
-from matplotlib.gridspec import GridSpec # for subplots placement manipulation
+"""
+CCS visualizations.
+
+Created: Monday, ‎April ‎5, ‎2021, ‏‎3:59:47 PM (EDT; maybe earlier actually)
+@author: Xiaohuan (Pixel) X.
+"""
 
 from utility427.helper427 import set_dir427, mkdir_p
-from utility427.math427 import findNearest, rank_eigvals, W_norm
+from utility427.math427 import findNearest, rank_eigvals, W_norm, np
+from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec  # matplotlib
+from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427  # matplotlib helpers
+from utility427.plt427 import load_CCS_stat, save_Masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from stims427 import Hamiltonian_cycle
 
@@ -29,32 +34,37 @@ def main_Sierpinski427():
                 for lv in hierLists[2]:
                     DD[(regType,p,lv)] = dict()
                     DD[(regType,p,lv)]['GTDict'] = make_SierpinskiGraph427(p, lv, norm = True, regType = regType)
-                    save_Masks(DD[(regType,p,lv)]['GTDict'], p, lv, regType)
+                    save_Masks(DD[(regType,p,lv)]['GTDict'], regType, p, lv)
                     DD[(regType,p,lv)]['A_hat_list'] = [make_A_hat_beta(DD[(regType,p,lv)]['GTDict']['A'], beta) for beta in beta_arr]
                     DD[(regType,p,lv)]['CCS_arr'] = CCS_analysis(DD[(regType,p,lv)]['GTDict'], beta_arr, DD[(regType,p,lv)]['A_hat_list'])
                     Sier = make_Sierpinski427(p, lv, x0 = [0.0,0.0], s0=1.0 , c=1.0, regType = regType)
                     Sier.Layout_Sierpinski427()
                     DD[(regType,p,lv)]['Sier'] = Sier
+
         plot_Graph_CCS(DD, beta_arr, key, \
                        CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type, \
                        colors=colors, regCCS=len(key)>1)
 
 
 def make_A_hat_beta(A, beta):
-    '''
-    Arg:
-        A (2D nparr; symmetric): adjacency/weight matrix
-        beta (any number): complexity-accuracy trade-off param
-    Return:
-        A_hat (2D nparr, shape = np.shape (A)):
-            assuming infinite walks on A, this is the resulting A_hat learned based on beta
-            A_hat = (1-e^(-β)) * A * (I - (e^(-β))A)^(-1)
-            undirected, weighted 3-regular graph with:
-            lv hierarchies:
-            level lv: base level; smallest communities/clusters of (3) nodes
-            ...
-            level 2: 3 clusters of (3) level-3 units
-            level 1: 1 cluster of (3) level-2 unit (coarsest level)
+    '''generate A_hat according to Max Entropy Model
+
+    Args
+    ----
+    - A (2D nparr; symmetric): adjacency/weight matrix
+    - beta (any number): complexity-accuracy trade-off param
+
+    Return
+    ------
+    - A_hat (2D nparr, shape = np.shape (A)):
+        assuming infinite walks on A, this is the resulting A_hat learned based on beta
+        A_hat = (1-e^(-β)) * A * (I - (e^(-β))A)^(-1)
+        undirected, weighted 3-regular graph with:
+        lv hierarchies:
+        level lv: base level; smallest communities/clusters of (3) nodes
+        ...
+        level 2: 3 clusters of (3) level-3 units
+        level 1: 1 cluster of (3) level-2 unit (coarsest level)
     '''
     n = np.shape(A)[0] # # of rows, but assuming symmetric, thus also cols (=nodes)
     A_ = W_norm(A)
@@ -62,12 +72,17 @@ def make_A_hat_beta(A, beta):
 
 def get_S_kl(n, A, beta_arr, edgeList, lvList, pList=[1,2,3,4], nList=np.arange(2,47)):
     """
-    Args:
-        n: power, whereas p is base
-        A: GroundTruth Transition Prob matrix.
-        beta_arr: list of β
-        pList: list of p in L_p(l)
-        nList: list of n in I_n(l)
+
+    Args
+    ----
+    - n: power, whereas p is base
+    - A: GroundTruth Transition Prob matrix.
+    - beta_arr: list of β
+    - pList: list of p in L_p(l)
+    - nList: list of n in I_n(l)
+
+    Intermediary
+    ------------
     get L_pl ≡ L_p(l) = sum over all eigenvalues: (λ/(1-λ))**p * S_kl
     where (λ_k/(1-λ_k))**p = pk[p,k]
     where we also need to compute S_kl first:
@@ -119,19 +134,25 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list = None): # need to change the awkw
     '''
     This function finds CCS for all beta in beta_arr.
     But it also finds CCS analytical approximation.
-    Args:
-        GroundTruthOnly (bool): not implemented ∵ those zero in original don't have well-defined hierarchies
-            True: only calculate mean over the edges that are non-zero in original Sierpiński
-            False: calculate mean over all appropriate edges
-        A_hat_list (np.arr):
-            None: analytical prediction from Eigen-decomposition (requires beta_arr)
-            np.arr: simulated result (vanilla method; doesn't require beta_arr)
-    Return:
-        CCS_arr (3D nparr):
-        since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
-            CCS_arr[s,0,l-1]: CCS of means at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
-            CCS_arr[s,1,l-1]: CCS of stds at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
 
+    Args
+    ----
+    - GroundTruthOnly (bool): not implemented ∵ those zero in original don't have well-defined hierarchies
+        True: only calculate mean over the edges that are non-zero in original Sierpiński
+        False: calculate mean over all appropriate edges
+    - A_hat_list (np.arr):
+        None: analytical prediction from Eigen-decomposition (requires beta_arr)
+        np.arr: simulated result (vanilla method; doesn't require beta_arr)
+    
+    Return
+    ------
+    - CCS_arr (3D nparr):
+        since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
+        CCS_arr[s,0,l-1]: CCS of means at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
+        CCS_arr[s,1,l-1]: CCS of stds at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
+
+    Miscellany
+    ----------
     Copy Paste from make_SierpinskiGraph427() documentation:
     edgeList (a list of size-2 tuples (v_i,v_j))
         node index in edgeList is simply p2ten(s, p=p)
@@ -193,19 +214,20 @@ def plot_Graph_CCS(DD, beta_arr, key,
                    CCS_stat=None, CCS_type='mean',
                    err_type='ste', colors=None, regCCS=False):
     """
+    
     Args
-    --------------
-    DD (dict):
+    ----
+    - DD (dict):
         DD.keys (tuple): (regType,p,n)
-    key (str): those in hierDict.keys()
-    CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
+    - key (str): those in hierDict.keys()
+    - CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
-    err_type (str): type to use as errorbar: 'std' or 'ste'
-    CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
-    colors (list of color hex strings):
+    - err_type (str): type to use as errorbar: 'std' or 'ste'
+    - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
+    - colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-    regCCS (bool):
+    - regCCS (bool):
         whether we will display 4 rows of CCS with no graphs
         assume:
             hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
@@ -274,20 +296,20 @@ def ax_CCS(ax, x, CCS_arr, params, key,
            is_log=True, colors=None, dpi=None, regCCS=None):
     '''
     Args
-    --------------
-    ax: axis object
-    params (tuple): (regType, p, n)
-    x: a list of beta
-    regType:
-        0: default Sierpiński graph
-        x: Sierpiński-like graph of type x regularization
-    key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
-    noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
-    err_type (str): type to use as errorbar: 'std' or 'ste'
-    CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
-    show_sim_param (bool): whether we show simulation parameters
-    is_log (bool): if True then use log scale on x axis.
-    regCCS (int): reusing same var name,
+    ----
+    - ax: axis object
+    - x: a list of beta
+    - params (tuple): (regType, p, n)
+        - regType (int):
+            0: default Sierpiński graph
+            x: Sierpiński-like graph of type x regularization
+    - key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
+    - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
+    - err_type (str): type to use as errorbar: 'std' or 'ste'
+    - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
+    - show_sim_param (bool): whether we show simulation parameters
+    - is_log (bool): if True then use log scale on x axis.
+    - regCCS (int): reusing same var name,
         but in this function = (regCCS+1)th row.
     '''
     if colors is None:
@@ -360,15 +382,16 @@ def ax_CCS(ax, x, CCS_arr, params, key,
 
 def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, annotate=None):
     '''
-    Args:
-        ax/axcb: axis object
-        params (tuple): (regType, p, n)
-        nodeList: [(i,x,y),...] (x,y) is coordinate
-        GTDict: dictionary containg 'A', 'edgeList', 'lvList' (all GroundTruth)
-        annotate (int):
-            None: we don't label the nodes
-            -1: Decimal
-            p (0<p<10): base-p expansion
+    Args
+    ----
+    - ax/axcb: axis object
+    - params (tuple): (regType, p, n)
+    - nodeList: [(i,x,y),...] (x,y) is coordinate
+    - GTDict (dict): contains 'A', 'edgeList', 'lvList' (all GroundTruth)
+    - annotate (int):
+        None: we don't label the nodes
+        -1: Decimal
+        p (0<p<10): base-p expansion
     '''
     if colors is None:
         colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
@@ -452,105 +475,6 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
         ax.set_title(title[20:-12]+'Base {:d} Representation)'.format(p), fontsize=17)
     ax.grid(False)
     #plt.legend(loc='upper left')
-
-
-def saveNclose427(fig, fname, dpi, makedir = True):
-    if makedir:
-        if dpi is not None:
-            mkdir_p(f"{'output/png_dpi'}{dpi}")
-        else: # save both
-            mkdir_p('output/png_dpi300')
-            mkdir_p('output/pdf_lossless')
-    if dpi is not None:
-        fig.savefig(f"{'output/png_dpi'}{dpi}{'/'}"+fname+'.png', bbox_inches='tight',dpi=dpi) # auto resize fig to fit titles and such
-    else: # save both
-        fig.savefig('output/png_dpi300/'+fname+'.png', bbox_inches='tight',dpi=300) # auto resize fig to fit titles and such
-        # pdf or svg for lossless quality
-        fig.savefig('output/pdf_lossless/'+fname+'.pdf', bbox_inches='tight') # auto resize fig to fit titles and such
-    fig.clf() # clear figure
-    plt.close(fig=fig) # close figure
-
-
-
-'''
-    ########################################
-        Miscellanious
-    ########################################
-'''
-
-def colors_selector(str=None, reverse=True):
-    """
-    website of reference: https://colorbrewer2.org/
-    I picked the color from top to bottom, so typically that's light to dark
-    if reverse is True, I will reverse said order, going from bottom to top.
-    """
-    if str is None:
-        colors = plt.rcParams['axes.prop_cycle'].by_key()['color'] # default color in pyplot
-    else:
-        if str=='7-class Greys':
-            colors = ['#f7f7f7','#d9d9d9','#bdbdbd','#969696','#737373','#525252','#252525']
-        elif str=='7-class Purples':
-            colors = ['#f2f0f7','#dadaeb','#bcbddc','#9e9ac8','#807dba','#6a51a3','#4a1486']
-        elif str=='7-class Oranges':
-            colors = ['#feedde','#fdd0a2','#fdae6b','#fd8d3c','#f16913','#d94801','#8c2d04']
-        elif str=='7-class Greens':
-            colors = ['#edf8e9','#c7e9c0','#a1d99b','#74c476','#41ab5d','#238b45','#005a32']
-        elif str=='5-class Greys':
-            colors = ['#f7f7f7','#cccccc','#969696','#636363','#252525']
-        elif str=='5-class Purples':
-            colors = ['#f2f0f7','#cbc9e2','#9e9ac8','#756bb1','#54278f']
-        elif str=='5-class Oranges':
-            colors = ['#feedde','#fdbe85','#fd8d3c','#e6550d','#a63603']
-        elif str=='5-class Greens':
-            colors = ['#edf8e9','#bae4b3','#74c476','#31a354','#006d2c']
-        elif str=='':
-            colors = ['#','#','#','#','#','#','#']
-    return colors[::-1] if reverse else colors
-
-def load_CCS_stat(fname='CCS_stat'):
-    set_dir427() # make sure cwd is the one this script is in
-    fname = 'input/' + fname + '.npy'
-    try:
-        return np.load(fname, allow_pickle=True).tolist()
-    except OSError: # couldn't find the file
-        raise OSError("Where is the result from stochastic simulations? (make sure .npy is in 'input' folder)")
-
-def make_level_masks(GTDict):
-    """
-    Generate mask of adjacency matrix such that all edges belong to certain level.
-    """
-    masks = dict()
-    for l in set(GTDict['lvList']): # initialize mask for all levels (including -1, which is undefined lv)
-        masks[f"{'lv'}{l}"] = np.zeros_like(GTDict['A'])
-    for k,(i,j) in enumerate(GTDict['edgeList']):
-        masks[f"{'lv'}{GTDict['lvList'][k]}"][i,j]=1
-        masks[f"{'lv'}{GTDict['lvList'][k]}"][j,i]=1 # undirected graph
-    return masks
-
-def save_Masks(GTDict, p, n, regType):
-    Sierpinski_dict = dict()
-    Sierpinski_dict['A'] = GTDict['A']
-    Sierpinski_dict['masks'] = make_level_masks(GTDict)
-    fname = 'output/npy_files/'
-    mkdir_p(fname)
-    fname += 'Sierpinski(regType={:d},p={:d},n={:d})'.format(regType,p,n)
-    np.save(fname, Sierpinski_dict)
-
-def cbrLabel427(cax, title):
-    '''
-    set colorbar label to the left, vertically
-    cbm.set_label() is the "vanilla"
-    assume fig.colorbar(ticklocation='right') which should be default
-    default fontsize plt.rcParams['font.size']=10.0
-    my convention of fontsize: title 17, other titles 11.
-    Args:
-        cax: axis onto which colorbar is drawn
-    '''
-    cax.text(-0.9,0.5,title\
-           , transform=cax.transAxes\
-           , verticalalignment='center', horizontalalignment='center'\
-           , fontsize=11\
-           , rotation='vertical')
 
 
 if __name__=="__main__":
