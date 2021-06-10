@@ -19,11 +19,11 @@ from utility427.sim_params427 import make_sim_params
 
 
 """
-CCS_stat (dict): 3 keys each corresponding to one statistic
-'mean','std','ste', the value (dict) of them is of the same structure:
+CCS_stat (dict): 3 keys each corresponding to one statistic of CCS:
+"mean", "std", "ste", the value (dict) of them is of the same structure:
 value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     s stands for the s-th sample in counts tensor defined in RW_Graph_Class.py
-    [s,0,:]: beta
+    [s,0,:]: beta (so 3rd dim is beta)
     [s,1,:]: group size
     [s,2,:]: steps_sample (time stamps at the time of sampling = walk length)
     [s,3,:]: stat of the group having that beta for CCS at level 1

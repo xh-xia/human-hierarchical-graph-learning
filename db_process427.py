@@ -7,7 +7,7 @@ import pandas as pd
 from math import log as log_e  # base e logarithm
 from math import isnan
 import base64, zlib, json  # to parse data string
-from sys import exit
+import sys  # for sys.exit()
 
 from utility427.helper427 import set_dir427, mkdir_p  # import helper functions from my own script
 
