@@ -35,7 +35,7 @@ time it took:
 - 621 sec (10.35 min) to make 132,000 (3*20*(13+9)*100) state points (36.7 MB)
 - 1 min 59 sec + 58 sec (~3 min) to check status (python RW_jobs.py status)
 - 2 hr 51 min to run all jobs (python RW_jobs.py run --ignore-conditions none --progress)
-- 313 sec to run RW_CCS_stat.py
+- 311 sec to run RW_CCS_stat.py
 """
 
 for i in range(len(params["beta_classes"])):

@@ -6,8 +6,10 @@ Created: Monday, ‎April ‎5, ‎2021, ‏‎3:59:47 PM (EDT; maybe earlier ac
 """
 
 from itertools import product  # for nested loops
+from concurrent.futures import ProcessPoolExecutor  # for multi-processing
+from concurrent.futures import ThreadPoolExecutor  # for multi-threading
 
-from utility427.helper427 import set_dir427, mkdir_p
+from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_decorator
 from utility427.math427 import findNearest, rank_eigvals, W_norm, np
 from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec  # matplotlib
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427  # matplotlib helpers
@@ -15,55 +17,111 @@ from utility427.plt427 import load_CCS_stat, save_Masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from stims427 import Hamiltonian_cycle
 
-# define some global constants (lowercase/mixedcase tho)
-err_type = "ste"
-CCS_type = "mean"  # 'mean' or 'std'
-key_class, n_agents, dpi = "reg_n_p", 100, 300
-sub_folder_name = "step_funct"  # folder in "input" folder containing CCS_stat .npy files
-# recreate beta_classes from "var_betas" in sim427/input/params.json
-var_betas = [[0.001, 10], [0.002, 0.37], [0.37, 0.002]]
-beta_classes = [None] * len(var_betas)
-for i, var_beta in enumerate(var_betas):
-    beta_classes[i] = "step_{}to{}".format(*var_beta)
-
 
 def main_Sierpinski427():
+    """
+    get global constants (lowercase/mixedcase tho) from params_CCS427.json:
+    - err_type (str): "std" or "ste", the type of spread of CCS
+    - CCS_type (str): "mean" or "std", the type of stat as part of def of CCS
+        use mean for the most part, as std is not steady
+    - key_class (str): "reg_n_p" or something, only a label to classify batch of jobs in sim
+    - n_agents (int): num of agents per subject parameter (like a repetition experiment)
+    - dpi (int): used in plot generation; if None, default to both 300 and lossless .pdf
+    - sub_fo_name (str): folder in "input" folder containing CCS_stat .npy files
+    - var_betas: should be effectively the same as that in sim427/input/params.json
+
+    - hierDict (dict): to recreate the graph parameters set (i.e., (regType, p, n))
+    """
+    p = get_params(fname="params_CCS427")
+    # recreate beta_classes from "var_betas" in sim427/input/params.json
+    p["beta_classes"] = [None] * len(p["var_betas"])
+    for i, var_beta in enumerate(p["var_betas"]):
+        p["beta_classes"][i] = "step_{}to{}".format(*var_beta)
     set_dir427()  # make sure cwd is the one this script is in
-    colors = colors_selector(str="5-class Greens")
-    beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
+    # add more parameters into p
+    p["colors"] = colors_selector(str="5-class Greens")
+    p["beta_arr"] = np.geomspace(0.0001, 10, 400)  # for analytical curve only
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
     hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
-    for beta_class in beta_classes:
-        npy_sub_path = f"{sub_folder_name}\\"
-        npy_sub_path += f"CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
-        CCS_stat = load_CCS_stat(fname=npy_sub_path)  # load sim results
-        for key in hierDict.keys():
-            DD = dict()  # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
-            hierLists = hierDict[key]
-            for regType, p, lv in product(*hierLists):
-                tup = (regType, p, lv)
-                DD[tup] = dict()
-                DD[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
-                save_Masks(DD[tup]["GTDict"], regType, p, lv)
-                DD[tup]["A_hat_list"] = [
-                    make_A_hat_beta(DD[tup]["GTDict"]["A"], beta) for beta in beta_arr
-                ]
-                DD[tup]["CCS_arr"] = CCS_analysis(
-                    DD[tup]["GTDict"], beta_arr, DD[tup]["A_hat_list"], analytic=False
-                )
-                Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
-                Sier.Layout_Sierpinski427()
-                DD[tup]["Sier"] = Sier
+    kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
+    kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
+    kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
 
-            kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
-            kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
-            kw_plot.update(dict(sub_folder_name=beta_class))
-            plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
+    # single-processing | w/o mp in plot_main() ~155 sec
+    for beta_class in p["beta_classes"]:
+        plot_main(**kw_loop, mp=False)(beta_class)
+    # multi-threading | w/o mp in plot_main() ~?? sec (too slow)
+    # with ThreadPoolExecutor() as executor:
+    #     executor.map(plot_main(**kw_loop, mp=False), p["beta_classes"])
 
+
+@partial_427_decorator
+def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
+              beta_arr, err_type, colors, dpi, mp=False):
+    """this function is I/O bound | suitable for multi-threading
+
+    Kwarg
+    -----
+    mp (bool): whether to use multi-processing on plot_side() | doesn't work, so use False for now
+
+    Intermediary
+    ------------
+    DD (dict): a data dict created only to be used in graphing (i.e., plot_Graph_CCS())
+        most results from numerical calculations are put in DD
+    """
+    npy_sub_path = f"{sub_fo_name}\\"
+    npy_sub_path += f"CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
+    CCS_stat = load_CCS_stat(fname=npy_sub_path)  # load sim results
+    for key in hierDict.keys():
+        kw_main = dict(beta_arr=beta_arr)
+        if mp:
+            with ProcessPoolExecutor() as executor:
+                dd_list = executor.map(plot_side(**kw_main), product(*hierDict[key]))
+        else:
+            dd_list = map(plot_side(**kw_main), product(*hierDict[key]))
+        DD = dict()
+        for dd in dd_list:  # aggregate all keys of dd in dd_list into DD
+            DD.update(dd)
+
+        kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
+        kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
+        kw_plot.update(dict(sub_folder_name=beta_class))
+        plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
+
+
+@partial_427_decorator
+def plot_side(tup, beta_arr):
+    """this function is numerical calculation heavy | suitable for multi-processing
+
+    Args
+    ----
+    - tup (tuple): (regType, p, lv), used to create the only key in <dd>
+
+    Return
+    ------
+    dd (dict of dict): it's in lowercase because in contrast to DD, dd only has one key-val pair
+        this will be later merged with other dd from the same function to create DD
+    """
+    regType, p, lv = tup  # unpack tup
+    dd = dict()  # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
+    dd[tup] = dict()
+    dd[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
+    save_Masks(dd[tup]["GTDict"], regType, p, lv)
+    dd[tup]["A_hat_list"] = [
+        make_A_hat_beta(dd[tup]["GTDict"]["A"], beta) for beta in beta_arr
+    ]
+    dd[tup]["CCS_arr"] = CCS_analysis(
+        dd[tup]["GTDict"], beta_arr, dd[tup]["A_hat_list"], analytic=False
+    )
+    Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
+    Sier.Layout_Sierpinski427()
+    dd[tup]["Sier"] = Sier
+
+    return dd
 
 def make_A_hat_beta(A, beta):
     """generate A_hat according to Max Entropy Model
@@ -311,18 +369,19 @@ def plot_Graph_CCS(
     if regCCS:
         fig = plt.figure(figsize=[20, 18])  # initialize
         if varb:
-            fig2 = plt.figure(figsize=[20, 18])  # initialize
+            fig2 = plt.figure(figsize=[20, 22])  # initialize
     else:
         fig = plt.figure(figsize=[20, 9])  # initialize
         if varb:
-            fig2 = plt.figure(figsize=[20, 9])  # initialize
+            fig2 = plt.figure(figsize=[20, 10])  # initialize
 
     ds = 0.2  # dummy axes for spacing between the visible plots
     cbW = 1  # colorbar width
+    hf = 9  # relative height of (sub)figure
     width_ratios = [ds, 19, cbW] * 3  # ≡ [ds,19,cbW,ds,19,cbW,ds,19,cbW]
-    height_ratios = [1, 9, ds, 1, 1, 9, ds]
+    height_ratios = [1, hf, ds, 1, 1, hf, ds]
     if regCCS:
-        height_ratios = [1, 9, ds, 1, 1, 9, ds, 1] + height_ratios
+        height_ratios = [1, hf, ds, 1, 1, hf, ds, 1] + height_ratios
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
     kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
     gs = GridSpec(**kw1)

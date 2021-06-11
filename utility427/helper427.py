@@ -6,6 +6,77 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
 """
 
 
+# region: advanced helper functions
+
+
+def partial_427(func, *pargs, **pkwargs):
+    """a function returning a partial function of funct (AKA partial funct)
+    Note:
+        for *pargs: the funct took in them first, then come *extra_args
+        for **pkwargs: order doesn't matter since it operates on key:val pair.
+    Arguments:
+    ==========
+    funct (function): function whose argments are supplied partially by pargs, pkwargs
+    *pargs: partial arguments supplied, the rest (*extra_args) are to be supplied
+    **pkwargs: ditto but with keywords, the rest (**extra_kwargs) are to be supplied
+    """
+
+    def wrapper(*extra_args, **extra_kwargs):
+        args = list(pargs)
+        args.extend(extra_args)
+        kwargs = dict(pkwargs)
+        kwargs.update(extra_kwargs)
+        return func(*args, **kwargs)  # return what funct is supposed to return
+
+    return wrapper  # when calling partial_427, returned thing (wrapper) is not evaluated yet
+
+
+def partial_427_decorator(funct):
+    """a decorator to reduce the number of arguments to whatever is left.
+    Using this decorator, funct will only be supplied partial arguments,
+    returning a partial function; internally this decorator uses partial_427.
+    But they should not be redundant.
+    Since this decorator is applied to the definition of funct,
+    we only need to do it once;
+    otherwise we have to call partial_427 whenever/wherever we use them.
+    One may think of this decorator as "partial_427 on steroids."
+    But really it doesn't do much under the hood;
+    partial_427 does most of the heavy lifting.
+
+    useful in mapping and multithreading/processing
+    when only one arg (i.e., last non-kwarg arg) is expected:
+    e.g., for funct = funct(x, y, z, key_x=1, key_y=2, key_z=3)
+    and we want to modify it:
+    @partial_427_decorator
+    funct(x, y, z, key_x=1, key_y=2, key_z=3):
+        whatnot
+    then:
+    f = funct(x, y, key_x=1, key_y=2, key_z=3) # this is funct but only taking in one arg z
+    f(z) # final return
+    # note: even if all arguments are passed in initially,
+    # the returned object f is still a function,
+    # waiting to be evaluated in order to get the return.
+    """
+
+    def wrapper(*args, **kwargs):
+        return partial_427(funct, *args, **kwargs)
+
+    return wrapper
+
+
+# endregion
+
+# region: generic helper functions
+
+
+def pd_set_max_display(pd, row=15, col=4):
+    """
+    pandas set max display using "display.max_rows/columns" in set_option method.
+    """
+    pd.set_option("display.max_rows", row)
+    pd.set_option("display.max_columns", col)
+
+
 def set_dir427(dir_=None, add_parent_to_path=False, return_cwd=True, depth=1):
     """change working dir
 
@@ -89,6 +160,9 @@ def get_params(params=None, fname="params"):
         raise
     else:  # 2) json loads just fine; so we (have) read json into a dict
         return json_dict
+
+
+# endregion
 
 
 def unique_iter(iter_):  # 'tis a generator function to work in tandem with itertools

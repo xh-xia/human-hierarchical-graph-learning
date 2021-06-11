@@ -136,10 +136,11 @@ def make_level_masks(GTDict):
 
 
 def save_Masks(GTDict, regType, p, n):
-    Sierpinski_dict = dict()
-    Sierpinski_dict["A"] = GTDict["A"]
-    Sierpinski_dict["masks"] = make_level_masks(GTDict)
+    set_dir427(depth=2)  # set cwd to CCS427.py dir
     fname = "output\\npy_files\\"
     mkdir_p(fname)
     fname += f"Sierpinski(regType={regType},p={p},n={n})"
+    Sierpinski_dict = dict()
+    Sierpinski_dict["A"] = GTDict["A"]
+    Sierpinski_dict["masks"] = make_level_masks(GTDict)
     np.save(fname, Sierpinski_dict)
