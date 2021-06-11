@@ -25,20 +25,25 @@ sys.path.pop(0)  # remove script dir from sys.path
 """
 
 
-def saveNclose427(fig, fname, dpi, makedir=True):
+def saveNclose427(fig, fname, dpi=None, sub_folder_name="", makedir=True):
     set_dir427(depth=2)  # set cwd to CCS427.py dir
-    if makedir:
-        if dpi is not None:
-            mkdir_p(f"output\\png_dpi{dpi}")
-        else:  # save both
-            mkdir_p("output\\png_dpi300")
-            mkdir_p("output\\pdf_lossless")
-    if dpi is None:  # save both 300dpi and lossless; pdf or svg for lossless quality
+    if sub_folder_name:  # empty string is falsy
+        sub_folder_name = f"\\{sub_folder_name}"
+
+    # if dpi not provided, save both 300dpi and lossless; pdf or svg for lossless quality
+    if dpi is None:
         dpi = 300
-        fig.savefig(
-            f"output\\pdf_lossless\\{fname}.pdf", bbox_inches="tight"
-        )  # auto resize fig to fit titles and such
-    fig.savefig(f"output\\png_dpi{dpi}\\{fname}.png", bbox_inches="tight", dpi=dpi)
+        dir_lossless = f"output\\pdf_lossless{sub_folder_name}"
+        if makedir:
+            mkdir_p(dir_lossless)
+        # bbox_inches="tight": auto resize fig to fit titles and such
+        fig.savefig(dir_lossless + f"\\{fname}.pdf", bbox_inches="tight")
+    # if dpi is provided, only save lossy version
+    dir_dpi = f"output\\png_dpi{dpi}{sub_folder_name}"
+    if makedir:
+        mkdir_p(dir_dpi)
+    fig.savefig(dir_dpi + f"\\{fname}.png", bbox_inches="tight", dpi=dpi)
+
     fig.clf()  # clear figure
     plt.close(fig=fig)  # close figure
 

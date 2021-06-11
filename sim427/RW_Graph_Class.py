@@ -66,11 +66,18 @@ class GLsim:
         self.sample_period = sample_period
         self.agentID = agentID
         self.beta = beta
-        # if variable beta case, <beta> can be a positive or negative float (but not list-like)
-        # convert codename beta (negative float) into list-like beta
+        """
+        if variable beta case, <beta> can be a positive or negative float (but not list-like)
+        convert codename beta (negative float) into list-like beta
+        NOTE: <0 beta := number of different actual beta
+        """
         if "var_beta" in kwargs:
-            if kwargs["var_beta"] and beta < 0:
-                self.beta = step_funct(10 ** (-3), 10 ** (1), -round(beta), steps_tot)
+            if beta < 0:
+                if isinstance(kwargs["var_beta"], bool) and kwargs["var_beta"]:
+                    self.beta = step_funct(10 ** (-3), 10 ** (1), -round(beta), steps_tot)
+                elif isinstance(kwargs["var_beta"], (list, np.ndarray)):
+                    # NOTE: we unpack kwargs["var_beta"] (list), assuming it has only 2 numbers
+                    self.beta = step_funct(*kwargs["var_beta"], -round(beta), steps_tot)
         # load transition prob matrix & masks
         # self.P, self.masks = load_Sier(regType, p, n)
         self.P, _ = load_Sier(regType, p, n)

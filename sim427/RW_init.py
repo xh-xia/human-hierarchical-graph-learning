@@ -28,16 +28,27 @@ params = make_sim_params(get_params())  # load params.json as dict, use it to cr
 
 RNG = np.random.default_rng(seed=params["SEED"])
 
-for key_class in params["key_classes"]:
+"""NOTE
+"var_betas", "beta_classes", "beta_arrs" have same length
+that's why they are all sliced by [i]
+time it took:
+- 621 sec (10.35 min) to make 132,000 (3*20*(13+9)*100) state points (36.7 MB)
+- 1 min 59 sec + 58 sec (~3 min) to check status (python RW_jobs.py status)
+- 2 hr 51 min to run all jobs (python RW_jobs.py run --ignore-conditions none --progress)
+- 313 sec to run RW_CCS_stat.py
+"""
+
+for i in range(len(params["beta_classes"])):
     for regType, p, n in params["pd"]:
         fname = "output/npy_files/"
-        fname += "Sierpinski(regType={:d},p={:d},n={:d}).npy".format(regType, p, n)
-        for beta_idx in range(len(params["beta_arr"])):
+        fname += f"Sierpinski(regType={regType:d},p={p:d},n={n:d}).npy"
+        for beta_idx in range(len(params["beta_arrs"][i])):
             for agentID in params["range_agents"]:
                 seed = RNG.integers(params["int_max"])
                 project.open_job(
                     {
-                        "key_class": key_class,
+                        "key_class": params["key_class"],
+                        "beta_class": params["beta_classes"][i],
                         "seed": seed,
                         "agentID": agentID,
                         "n_agents": params["n_agents"],
@@ -46,8 +57,8 @@ for key_class in params["key_classes"]:
                         "regType": regType,
                         "p": p,
                         "n": n,
-                        "beta": params["beta_arr"][beta_idx],
+                        "beta": params["beta_arrs"][i][beta_idx],
                         "beta_idx": beta_idx,
-                        "var_beta": params["var_beta"],
+                        "var_beta": params["var_betas"][i],
                     }
                 ).init()

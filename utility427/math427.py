@@ -22,8 +22,8 @@ def get_factors(x, neg=False, ub=None):
     """
     find all factors of integer x; not very efficient
 
-    Args:
-    -----
+    Args
+    ----
     neg (bool): if True, return negative factors
     ub (positive int): if present, keep only factors whose abs val <= ub
     """
@@ -56,7 +56,7 @@ def get_factors(x, neg=False, ub=None):
 
 
 def step_funct(val_min, val_max, num, steps_tot):
-    """generate a list of vals (for discrete step functions)
+    """generate a list of vals (for discrete monotonic step functions)
 
     Args
     ----
@@ -71,8 +71,8 @@ def step_funct(val_min, val_max, num, steps_tot):
         rep = steps_tot // num (quotient)
         d = (val_max - val_min) / (num - 1) # returned by np.linspace(retstep = True)
 
-    Return:
-    -------
+    Return
+    ------
     arr (np.arr): [val_min, val_min + d, ..., val_min + (num - 1) * d]
     where each entry is repeated <rep> times
     """

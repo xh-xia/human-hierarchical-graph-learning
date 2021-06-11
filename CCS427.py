@@ -15,44 +15,54 @@ from utility427.plt427 import load_CCS_stat, save_Masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from stims427 import Hamiltonian_cycle
 
+# define some global constants (lowercase/mixedcase tho)
+err_type = "ste"
+CCS_type = "mean"  # 'mean' or 'std'
+key_class, n_agents, dpi = "reg_n_p", 100, 300
+sub_folder_name = "step_funct"  # folder in "input" folder containing CCS_stat .npy files
+# recreate beta_classes from "var_betas" in sim427/input/params.json
+var_betas = [[0.001, 10], [0.002, 0.37], [0.37, 0.002]]
+beta_classes = [None] * len(var_betas)
+for i, var_beta in enumerate(var_betas):
+    beta_classes[i] = "step_{}to{}".format(*var_beta)
+
 
 def main_Sierpinski427():
     set_dir427()  # make sure cwd is the one this script is in
     colors = colors_selector(str="5-class Greens")
-    beta_arr = np.geomspace(0.0001, 10, 400)
+    beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
     hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
-    key_class, n_agents, dpi = "reg_n_p", 10, 300
-    err_type = "std"
-    CCS_type = "mean"  # 'mean' or 'std'
-    CCS_stat = load_CCS_stat(
-        fname=f"CCS_stat_{CCS_type}_{key_class}_{n_agents}"
-    )  # load sim results
-    for key in hierDict.keys():
-        DD = dict()  # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
-        hierLists = hierDict[key]
-        for regType, p, lv in product(*hierLists):
-            tup = (regType, p, lv)
-            DD[tup] = dict()
-            DD[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
-            save_Masks(DD[tup]["GTDict"], regType, p, lv)
-            DD[tup]["A_hat_list"] = [
-                make_A_hat_beta(DD[tup]["GTDict"]["A"], beta) for beta in beta_arr
-            ]
-            DD[tup]["CCS_arr"] = CCS_analysis(
-                DD[tup]["GTDict"], beta_arr, DD[tup]["A_hat_list"], analytic=False
-            )
-            Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
-            Sier.Layout_Sierpinski427()
-            DD[tup]["Sier"] = Sier
+    for beta_class in beta_classes:
+        npy_sub_path = f"{sub_folder_name}\\"
+        npy_sub_path += f"CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
+        CCS_stat = load_CCS_stat(fname=npy_sub_path)  # load sim results
+        for key in hierDict.keys():
+            DD = dict()  # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
+            hierLists = hierDict[key]
+            for regType, p, lv in product(*hierLists):
+                tup = (regType, p, lv)
+                DD[tup] = dict()
+                DD[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
+                save_Masks(DD[tup]["GTDict"], regType, p, lv)
+                DD[tup]["A_hat_list"] = [
+                    make_A_hat_beta(DD[tup]["GTDict"]["A"], beta) for beta in beta_arr
+                ]
+                DD[tup]["CCS_arr"] = CCS_analysis(
+                    DD[tup]["GTDict"], beta_arr, DD[tup]["A_hat_list"], analytic=False
+                )
+                Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
+                Sier.Layout_Sierpinski427()
+                DD[tup]["Sier"] = Sier
 
-        kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
-        kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
-        plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
+            kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
+            kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
+            kw_plot.update(dict(sub_folder_name=beta_class))
+            plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
 
 
 def make_A_hat_beta(A, beta):
@@ -252,7 +262,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
 
 def plot_Graph_CCS(
     DD, beta_arr, key, CCS_stat=None, CCS_type="mean", err_type="ste",
-    colors=None, dpi=None, regCCS=False
+    colors=None, dpi=None, regCCS=False, sub_folder_name=""
 ):
     """It produces both CCS plot and Graph (node-edge graph, not graph graph) plot
 
@@ -277,6 +287,9 @@ def plot_Graph_CCS(
             hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
             or
             hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
+    - sub_folder_name (str):
+        the name of the folder in f"output/{whatnot}/" to store the plots
+        where <whatnot> is defined in saveNclose427()
 
     Save
     ----
@@ -296,12 +309,10 @@ def plot_Graph_CCS(
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     if regCCS:
-        fname = "CCS_" + key
         fig = plt.figure(figsize=[20, 18])  # initialize
         if varb:
             fig2 = plt.figure(figsize=[20, 18])  # initialize
     else:
-        fname = "CCS_" + key
         fig = plt.figure(figsize=[20, 9])  # initialize
         if varb:
             fig2 = plt.figure(figsize=[20, 9])  # initialize
@@ -329,11 +340,12 @@ def plot_Graph_CCS(
             if varb:
                 axes2[f"CCS_reg{regType}"] = [None] * 3
 
+    fname = f"CCS_{key}"
     if CCS_stat is not None:
         # both group size and walk length are the same across all beta
         n_agents = round(CCS_stat["mean"][DD_keys[0]][-1, 1, 0])
         n_steps = round(CCS_stat["mean"][DD_keys[0]][-1, 2, 0])
-        fname = f"CCS_{key}_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
+        fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
 
     if regCCS:  # assuming DD_keys has 12 entries
         for i in range(3):
@@ -385,9 +397,9 @@ def plot_Graph_CCS(
             axlabel.set_axis_off()  # same as ax.axis('off')
             kw5 = dict(fontsize=17, horizontalalignment="center", transform=axlabel.transAxes)
             axlabel.text(-2.4, 1.05, f"{text_labels[i]}", **kw5)
-    saveNclose427(fig, fname + "_const", dpi=dpi)
+    saveNclose427(fig, fname + "_const", dpi=dpi, sub_folder_name=sub_folder_name)
     if varb:
-        saveNclose427(fig2, fname + "_var", dpi=dpi)
+        saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
 
 
 def ax_CCS(ax, x, CCS_arr, params, key,

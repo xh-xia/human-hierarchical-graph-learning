@@ -26,7 +26,7 @@ def make_sim_params(params):
     Arg - params (dict)
     -------------------
     NOTE: params should be read from params.json file, which should be pure json w/o comments
-    - key_classes (list): list of key_class (currently only uses first entry)
+    # - key_classes (list): list of key_class (not implemented)
         - key_class (str): type of simulation run; encoding regType, p, n parameters
             e.g., "reg_n_p", "r"
     - n_agents (int): num of agents per param (including beta)
@@ -34,20 +34,26 @@ def make_sim_params(params):
     - SEED (int): seed for current simulation params
     - steps_tot (int): total number of steps for random walk
     - sample_period (int): sample sim results every <sample_period> steps
-    - var_beta (bool): whether we extend codenames (variable beta case) in "beta_arr"
+    - var_betas (nested list of bool or 1D-list or np.arr):
+        NOTE: it's not generic list-like or arr-like
+            bool: whether we extend codenames (variable beta case) in "beta_arrs"[i]
+            list/np.arr: must contain only two numbers: val_min, val_max in step_funct()
+                for bool: val_min, val_max = 10 ** (-3), 10 ** (1)
     - ub (int): upperbound for variable beta (shows up in get_factors())
 
     Intermediary
     ------------
     - params["pd"] (iter): reg, n, p tuple iterator
     - params["int_max"] (int32): some constant, in this case 2147483647 for int (int32 really)
-    - params["beta_arr"] (np.arr): e.g., [0.01, 0.1, 1,| -1, -2, -3]
+    - params["beta_arrs"] (list of np.arr):
+     entry in the list e.g., [0.01, 0.1, 1,| -1, -2, -3]
                             (constant case)|(variable case)
         1D arr of beta values (constant beta case)
-        also incorporates variable beta case (mono-increase step function w/ certain <sf_width>)
-        sweeping from beta_min (min(constant case)) to beta_max (max(constant case))
-            val (<0; comes after constant case) in the arr is only a codename:
-            -x (x is positive int):
+        also incorporates variable beta case (monotonic step function w/ certain <sf_width>)
+        sweeping from beta_min to beta_max (if beta_max < beta_min, it's decreasing)
+            <0 val (comes after constant case) in the arr is only a codename;
+            denote <0 val as -x (where x is positive int):
+            x is number of times beta changes (e.g., x=1, beta takes 2 vals, changed once)
             e.g., vals = []
                 beta_increment = (beta_max - beta_min) / x
                 beta (at sf_step i, i=0,1,...,x)
@@ -59,25 +65,46 @@ def make_sim_params(params):
             NOTE: since x has to be positive integer, put alongside float beta (const case),
                   the negative beta (var case) will be float as well;
                   so when extracting codenames (var case), use round(-x) to get original int first
+    - params["beta_classes"] (list of str): type of beta
+        - "constant"
+        - "step_0.001to10"
+        - "step_{}to{}".format(*params["var_betas"][i])
     - params["range_agents"] (range object): range(params["n_agents"])
     """
     params["int_max"] = np.iinfo(int).max
 
-    params["beta_arr"] = 10 ** np.linspace(-3, 1, params["n_beta_constcase"], endpoint=True)
-    if params["var_beta"]:
-        params["beta_arr"] = np.concatenate(
-            [params["beta_arr"], get_factors(params["steps_tot"], neg=True, ub=params["ub"])],
-            axis=None,
-        )
+    # beta and beta classes (they have the same length)
+    params["beta_arrs"] = [None] * len(params["var_betas"])  # initialize beta list
+    params["beta_classes"] = [None] * len(params["var_betas"])  # initialize beta class list
+    for i in range(len(params["var_betas"])):
+        # for each item in params["var_betas"],
+        # it has a corresponding item in beta_arrs and beta_classes
+        params["beta_arrs"][i] = 10 ** np.linspace(-3, 1, params["n_beta_constcase"], endpoint=True)
+        params["beta_classes"][i] = "constant"
+        kw_factors = dict(neg=True, ub=params["ub"])
+        if isinstance(params["var_betas"][i], bool) and params["var_betas"][i]:
+            params["beta_classes"][i] = "step_0.001to10"
+            params["beta_arrs"][i] = np.concatenate(
+                [params["beta_arrs"][i], get_factors(params["steps_tot"], **kw_factors)],
+                axis=None,
+            )
+        elif isinstance(params["var_betas"][i], (list, np.ndarray)):
+            params["beta_classes"][i] = "step_{}to{}".format(*params["var_betas"][i])
+            params["beta_arrs"][i] = np.concatenate(
+                [params["beta_arrs"][i], get_factors(params["steps_tot"], **kw_factors)],
+                axis=None,
+            )
+
     params["range_agents"] = range(params["n_agents"])
 
     hierDict = dict()
     hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]]
-    if params["key_classes"][0] == "reg_n_p":
+    if params["key_class"] == "reg_n_p":
         params["pd"] = unique_iter(
             chain.from_iterable([product(*hierDict["reg_n"]), product(*hierDict["reg_p"])])
         )
-    elif params["key_classes"][0] == "r":
+    elif params["key_class"] == "r":
         params["pd"] = product([0, 1, 2, 3], [3], [3])
+    params["pd"] = list(params["pd"])  # to prevent from exhausting generator
     return params

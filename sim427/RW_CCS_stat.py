@@ -31,21 +31,23 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     [s,3+n-2,:]: stat of the group having that beta for CCS at level n-1
 """
 
+is_operation = True  # whether CCS_compute is done as @operation in signac
+sub_folder_name = "step_funct"  # folder inside output folder to store all "var_betas" CCS_stat
 
-def print_progress(counter, tot=26000):
+
+def print_progress(counter, tot=44000):
     if counter % 200 == 0:
         print(f"Progresss: {counter}/{tot}")
 
 
 def main_CCS_stat():
     # np.seterr(all='raise') # set all runtime warning to raise errors
-    is_operation = True  # whether CCS_compute is done as @operation in signac
     # load parameters from json
     temp = get_params()
     # change some parameters
-    # temp["n_agents"], temp["key_classes"][0] = 10, "r"  # ~ 6 sec (may be inaccurate)
-    temp["n_agents"], temp["key_classes"][0] = 10, "reg_n_p"  # ~ 7 sec
-    # temp["n_agents"], temp["key_classes"][0] = 100, "reg_n_p"  # ~ 160 sec
+    # temp["n_agents"], temp["key_class"] = 10, "r"  # ~ 6 sec (may be inaccurate)
+    # temp["n_agents"], temp["key_class"] = 10, "reg_n_p"  # ~ 7 sec (may be inaccurate)
+    temp["n_agents"], temp["key_class"] = 100, "reg_n_p"  # ~ x sec
     params = make_sim_params(temp)
     CCS_type = "mean"  # 'mean' or 'std'
     if CCS_type == "mean":
@@ -56,50 +58,50 @@ def main_CCS_stat():
     CCS_stat["mean"], CCS_stat["std"], CCS_stat["ste"] = dict(), dict(), dict()
     project = sn.get_project()
     n_sample = int(np.floor(params["steps_tot"] / params["sample_period"]))
-    counter = 0  # to report progress
-    for regType, p, n in params["pd"]:
-        job_criteria = {
-            "key_class": params["key_classes"][0],
-            "regType": regType,
-            "p": p,
-            "n": n,
-            "n_agents": params["n_agents"],
-        }
-        nparr = np.zeros((n_sample, 3 + n - 1, len(params["beta_arr"])))
-        stat_arr = np.zeros((n_sample, n - 1, len(params["beta_arr"]), params["n_agents"]))
-        for job in project.find_jobs(job_criteria):
-            counter += 1
-            print_progress(counter)
-            nparr[:, 0, job.sp.beta_idx] = job.sp.beta
-            nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
-            with job.data:
-                nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
-                if is_operation:
-                    temp = job.data["CCS"][:]
-                else:
-                    # CCS_compute here (not as @operation)
-                    temp = CCS(
-                        job.data["GLsim_data"]["counts_me"][:],
-                        job.sp.regType,
-                        job.sp.p,
-                        job.sp.n,
-                        job.sp.seed,
-                    )
-            for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
-                stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
-                # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
-                #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
-        nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
-        CCS_stat["mean"][(regType, p, n)] = nparr.copy()
-        nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
-        CCS_stat["std"][(regType, p, n)] = nparr.copy()
-        nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
-        CCS_stat["ste"][(regType, p, n)] = nparr.copy()
-    print(f"Total number of jobs: {counter}")
-    fname = set_dir427() + "\\output\\"
-    mkdir_p(fname)
-    fname += "CCS_stat_{}_{}_{:d}".format(CCS_type, params["key_classes"][0], params["n_agents"])
-    np.save(fname, CCS_stat)
+    for i in range(len(params["beta_classes"])):
+        counter = 0  # to report sub-progress
+        for regType, p, n in params["pd"]:
+            job_criteria = {
+                "key_class": params["key_class"],
+                "beta_class": params["beta_classes"][i],
+                "regType": regType,
+                "p": p,
+                "n": n,
+                "n_agents": params["n_agents"],
+            }
+            nparr = np.zeros((n_sample, 3 + n - 1, len(params["beta_arrs"][i])))
+            stat_arr = np.zeros((n_sample, n - 1, len(params["beta_arrs"][i]), params["n_agents"]))
+            for job in project.find_jobs(job_criteria):
+                counter += 1
+                print_progress(counter)
+                nparr[:, 0, job.sp.beta_idx] = job.sp.beta
+                nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
+                with job.data:
+                    nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
+                    if is_operation:
+                        temp = job.data["CCS"][:]
+                    else:
+                        # CCS_compute here (not as @operation)
+                        kw_CCS = dict(counts_me=job.data["GLsim_data"]["counts_me"][:])
+                        kw_CCS.update(dict(regType=job.sp.regType, p=job.sp.p, n=job.sp.n))
+                        temp = CCS(**kw_CCS, seed=job.sp.seed)
+                for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
+                    stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
+                    # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
+                    #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
+            nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
+            CCS_stat["mean"][(regType, p, n)] = nparr.copy()
+            nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
+            CCS_stat["std"][(regType, p, n)] = nparr.copy()
+            nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
+            CCS_stat["ste"][(regType, p, n)] = nparr.copy()
+
+        print(f"loop {i}: {params['beta_classes'][i]} has {counter} jobs")
+        fname = set_dir427() + f"\\output\\{sub_folder_name}\\"
+        mkdir_p(fname)
+        fname += f"CCS_stat_{CCS_type}_{params['key_class']}_{params['beta_classes'][i]}"
+        fname += f"_{params['n_agents']:d}"
+        np.save(fname, CCS_stat)
 
     return 0
 
