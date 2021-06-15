@@ -15,29 +15,32 @@ from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec 
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427  # matplotlib helpers
 from utility427.plt427 import load_CCS_stat, save_Masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
+from utility427.sim_params427 import make_sim_params
 from stims427 import Hamiltonian_cycle
 
 
 def main_Sierpinski427():
     """
-    get global constants (lowercase/mixedcase tho) from params_CCS427.json:
+    get parameters from params_CCS427.json:
     - err_type (str): "std" or "ste", the type of spread of CCS
     - CCS_type (str): "mean" or "std", the type of stat as part of def of CCS
         use mean for the most part, as std is not steady
-    - key_class (str): "reg_n_p" or something, only a label to classify batch of jobs in sim
-    - n_agents (int): num of agents per subject parameter (like a repetition experiment)
     - dpi (int): used in plot generation; if None, default to both 300 and lossless .pdf
     - sub_fo_name (str): folder in "input" folder containing CCS_stat .npy files
+
+    get parameters from sim427/input/params.json:
+    - key_class (str): "reg_n_p" or something, only a label to classify batch of jobs in sim
+    - n_agents (int): num of agents per subject parameter (like a repetition experiment)
     - var_betas: should be effectively the same as that in sim427/input/params.json
+
 
     - hierDict (dict): to recreate the graph parameters set (i.e., (regType, p, n))
     """
-    p = get_params(fname="params_CCS427")
-    # recreate beta_classes from "var_betas" in sim427/input/params.json
-    p["beta_classes"] = [None] * len(p["var_betas"])
-    for i, var_beta in enumerate(p["var_betas"]):
-        p["beta_classes"][i] = "step_{}to{}".format(*var_beta)
-    set_dir427()  # make sure cwd is the one this script is in
+    temp_dir = set_dir427(dir_ = set_dir427() + "\\sim427\\input")
+    p = get_params(fname=temp_dir + "\\params", default_dir=False)
+    make_sim_params(p)
+    p.update(get_params(fname="params_CCS427"))
+    set_dir427()  # go back to script dir
     # add more parameters into p
     p["colors"] = colors_selector(str="5-class Greens")
     p["beta_arr"] = np.geomspace(0.0001, 10, 400)  # for analytical curve only
@@ -369,11 +372,11 @@ def plot_Graph_CCS(
     if regCCS:
         fig = plt.figure(figsize=[20, 18])  # initialize
         if varb:
-            fig2 = plt.figure(figsize=[20, 22])  # initialize
+            fig2 = plt.figure(figsize=[20, 18])  # initialize
     else:
         fig = plt.figure(figsize=[20, 9])  # initialize
         if varb:
-            fig2 = plt.figure(figsize=[20, 10])  # initialize
+            fig2 = plt.figure(figsize=[20, 9])  # initialize
 
     ds = 0.2  # dummy axes for spacing between the visible plots
     cbW = 1  # colorbar width
@@ -476,7 +479,7 @@ def ax_CCS(ax, x, CCS_arr, params, key,
     - key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
-    - varb (bool): whether we consider only negative beta (variable beta) or not
+    - varb (bool): whether we draw negative beta (variable beta) or not
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
     - show_sim_param (bool): whether we show simulation parameters
@@ -487,10 +490,24 @@ def ax_CCS(ax, x, CCS_arr, params, key,
     Intermediary
     ------------
     variable beta case:
-        -whatnot[-9:-1] contains num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
+        -whatnot[-9:-1] contains num of beta = [1, 2, 3, 4, 5, 6, 8, 10, 12] (abandoned)
+        whatnot[-1] = -1, which means (n-1) number of beta
         <whatnot> := noise[err_type][params][-1, 0, :],
         which is a list of actual beta (including negative codename beta)
+
+    Return
+    ------
+    - xmaxs (list): list of beta that maximizes CCS at each level
+        xmaxs[1]: beta that maximizes CCS at lv2/lv3
+        xmaxs[i]: beta that maximizes CCS at lv(i+1)/lv(i+2)
     """
+    # set up beta range (analytical) for plot
+    if is_log:
+        x_range = (min(x) * 1.00, max(x) * 1.25)
+    else:
+        delta = (max(x) - min(x)) * 0.05
+        x_range = (min(x) - delta, max(x) + delta)
+    ax.set_xlim(x_range)
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     (regType, p, n) = params
@@ -518,68 +535,67 @@ def ax_CCS(ax, x, CCS_arr, params, key,
         n_agents = noise["mean"][params][-1, 1, 0]  # since all β have same group size, take 0
         n_steps = noise["mean"][params][-1, 2, 0]  # ditto but w/ walk length
         topy, s = 0.94, 0.06
-        beta_type = "dynamic" if varb else "constant"
+        beta_type = "both" if varb else "constant"
         ax.text(0.5, topy, f"n_agents={n_agents:.0f}", **styles_txt)
         ax.text(0.5, topy - 1 * s, f"walk_length={n_steps:.0f}", **styles_txt)
         ax.text(0.5, topy - 2 * s, f"errorbar={err_type}", **styles_txt)
         ax.text(0.5, topy - 3 * s, f"CCS_type={CCS_type}", **styles_txt)
         ax.text(0.5, topy - 4 * s, f"beta_type={beta_type}", **styles_txt)
-    styles1 = {"alpha": 0.74, "linewidth": 2}
-    # find where <0 beta starts and create beta slice object (i.e., bs)
+
     if noise is not None:
-        bs = None
+        bs = None  # find where <0 beta starts (negative index)
         d = noise["mean"][params].shape[2]  # total number of beta
-        for i in range(-1, -d - 1, -1):  # count from right because that where <0 beta lies
+        for i in range(-1, -d - 1, -1):  # count from right because that's where <0 beta lies
             if noise["mean"][params][-1, 0, i] > 0:
                 bs = i + 1
                 break
-        if varb:  # if there is no <0 beta, slice(bs, None) is then [0:], which is >0 beta
-            bs = slice(bs, None)
-            # this is separate operation: make twin axis for varb since it is on different scale
-            ax_twin = ax.twiny()  # instantiate a twin x axis sharing same y-axis
-            ax_twin.set_xticks(-noise["mean"][params][-1, 0, bs])  # tick where data point is at
-        else: # get >0 beta
-            bs = slice(0, d + bs)
-    for i in range(n_level):  # ↓ first plot analytical curve
-        # print('DEBUG: CCS_arr_lv1 - mean {}'.format(CCS_arr[:,0,i]))
-        # print('DEBUG: CCS_arr_lv1 - std {}'.format(CCS_arr[:,1,i]))
+        if bs != -1:
+            # import warnings  # may want to comment the warnings out since it gets verbose
+            # msg = "only <noise[\"mean\"][params][-1, 0, -1]> can be < 0\n"
+            # msg += f"currently <noise[\"mean\"][params][-1, 0, {bs}:]> are all < 0\n"
+            # msg += "using last val instead"
+            # warnings.warn(msg)
+            bs = -1  # force use last val
+        # bs1 = slice(bs, None)  # if no <0 beta, slice(bs, None) = [0:], which is >0 beta
+        bs2 = slice(0, d + bs)  # get >0 beta slice object
+    styles1 = dict(alpha= 0.74, linewidth= 2)
+    for i in range(n_level):
         styles1.update({"label": f"lv{i+1}/lv{i+2}", "color": cmap(i)})
-        ax.plot(x, CCS_arr[:, CCS_type_slice, i], **styles1)
-        if noise is not None:
-            styles2 = dict(yerr=noise[err_type][params][-1, 3 + i, bs])
-            styles2.update(dict(linestyle="None", capsize=4.0, marker=".", markersize=11))
+        ax.plot(x, CCS_arr[:, CCS_type_slice, i], **styles1)  # plot analytical curve
+        if noise is not None:  # put scatter points of simulated results in
+            if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
+                kw1 = dict(color=cmap(i), zorder=1)
+                y_mean = noise["mean"][params][-1, 3 + i, bs]
+                y_err = noise[err_type][params][-1, 3 + i, bs]
+                ax.plot(ax.get_xlim(), [y_mean] * 2, **kw1)  # draw line
+                kw1.update(dict(y1 = [y_mean - y_err] * 2, y2 = [y_mean + y_err] * 2))
+                ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
+            # plot fixed beta (scatter plot)
+            styles2 = dict(linestyle="None", capsize=4.0, marker=".", markersize=11)
+            styles2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
             styles2.update(dict(markeredgecolor=cmap(i), markerfacecolor=cmap(i), ecolor=cmap(i)))
             # styles2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-            styles2.update({"alpha": 0.74, "linewidth": 2})
-            if varb:
-                kw_erb = dict(x=-noise["mean"][params][-1, 0, bs])
-            else:
-                kw_erb = dict(x=noise["mean"][params][-1, 0, bs])
-            kw_erb.update(dict(y=noise["mean"][params][-1, 3 + i, bs]))
-            if varb:
-                ax_twin.errorbar(**kw_erb, **styles2)
-            else:
-                ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
+            kw_erb = dict(x=noise["mean"][params][-1, 0, bs2])
+            kw_erb.update(dict(y=noise["mean"][params][-1, 3 + i, bs2]))
+            kw_erb.update(dict(yerr=noise[err_type][params][-1, 3 + i, bs2]))
+            ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
 
-    # argmax = beta that maximizes bottom 3 level diffs (2 diffs)
-    xmax3 = x[np.argmax(CCS_arr[:, CCS_type_slice, 0])]
-    ymax3 = np.max(CCS_arr[:, CCS_type_slice, 0])
-    xmax2 = x[np.argmax(CCS_arr[:, CCS_type_slice, 1])]
-    ymax2 = np.max(CCS_arr[:, CCS_type_slice, 1])
-    text3 = f"({xmax3:.3f},{ymax3:.3f})"
-    text2 = f"({xmax2:.3f},{ymax2:.3f})"
+    # argmax = beta that maximizes CCS at different permissible levels
+    xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
     arrowprops = dict(arrowstyle="simple", facecolor="grey", edgecolor="grey")
     arrowprops.update(dict(linewidth=1 / 3, alpha=0.74))
-    kw = dict(textcoords="axes fraction", fontsize=11, arrowprops=arrowprops)
-    kw.update(dict(ha="center", va="center"))
-    ax.annotate(text3, color=colors[0], xy=(xmax3, ymax3), xytext=(0.85, 0.95), **kw)
-    ax.annotate(text2, color=colors[1], xy=(xmax2, ymax2), xytext=(0.15, 0.65), **kw)
+    kw_text = dict(textcoords="axes fraction", fontsize=11, arrowprops=arrowprops)
+    kw_text.update(dict(ha="center", va="center"))
+    for i in range(0, n - 1):  # put peak val on plot
+        xmaxs[i] = x[np.argmax(CCS_arr[:, CCS_type_slice, i])]
+        ymaxs[i] = np.max(CCS_arr[:, CCS_type_slice, i])
+        # texts[i] = f"({xmaxs[i]:.3f},{ymaxs[i]:.3f})"  # show both beta and CCS
+        texts[i] = f"{xmaxs[i]:.3f}"  # show only beta
+        kw_text.update(dict(color=cmap(i), xy=(xmaxs[i], ymaxs[i])))
+        kw_text.update(dict(xytext=(0.85 - i * 0.2, 0.05)))
+        ax.annotate(texts[i], **kw_text)
     if regCCS == 3:  # only have xlabel if bottom row
         ax.set_xlabel(xlabel, fontsize=11)
-        if varb:
-            ax_twin.xaxis.set_ticks_position("top")  # move 2nd axis to the top
-            ax_twin.xaxis.set_label_position("top")  # move 2nd axis to the top
-            ax_twin.set_xlabel(xlabel + " (dynamic)")
     ax.set_ylabel(ylabel, fontsize=11)
     if key in ["n", "reg_n"]:
         ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
@@ -593,7 +609,7 @@ def ax_CCS(ax, x, CCS_arr, params, key,
     else:
         ax.legend(loc="center right")
     ax.grid(False)
-    return xmax2, xmax3
+    return xmaxs
 
 
 def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, annotate=None):

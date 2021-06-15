@@ -31,23 +31,23 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     [s,3+n-2,:]: stat of the group having that beta for CCS at level n-1
 """
 
-is_operation = True  # whether CCS_compute is done as @operation in signac
-sub_folder_name = "step_funct"  # folder inside output folder to store all "var_betas" CCS_stat
 
 
-def print_progress(counter, tot=44000):
-    if counter % 200 == 0:
+def print_progress(counter, tot=28000):
+    if counter % 1000 == 0:
         print(f"Progresss: {counter}/{tot}")
 
 
 def main_CCS_stat():
+    is_operation = True  # whether CCS_compute is done as @operation in signac
+    sub_folder_name = "step_funct_max_beta"  # folder inside output folder to store all "var_betas" CCS_stat
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()
     # change some parameters
     # temp["n_agents"], temp["key_class"] = 10, "r"  # ~ 6 sec (may be inaccurate)
     # temp["n_agents"], temp["key_class"] = 10, "reg_n_p"  # ~ 7 sec (may be inaccurate)
-    temp["n_agents"], temp["key_class"] = 100, "reg_n_p"  # ~ x sec
+    temp["n_agents"], temp["key_class"] = 100, "max_beta"  # 28000 sp ~ 200 sec
     params = make_sim_params(temp)
     CCS_type = "mean"  # 'mean' or 'std'
     if CCS_type == "mean":

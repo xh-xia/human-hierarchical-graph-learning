@@ -12,7 +12,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 from utility427.helper427 import set_dir427, get_params
 from utility427.math427 import np
-from utility427.sim_params427 import make_sim_params
+from utility427.sim_params427 import make_sim_params, get_max_betas
 
 set_dir427()  # change cwd to script dir
 
@@ -25,6 +25,7 @@ reg_n_p: 20 cases of combination from:
 implemented variable beta case: with num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
 """
 params = make_sim_params(get_params())  # load params.json as dict, use it to create sim params
+max_beta_dict = get_params(fname="params_max_beta")
 
 RNG = np.random.default_rng(seed=params["SEED"])
 
@@ -38,6 +39,7 @@ time it took:
 - 311 sec to run RW_CCS_stat.py
 """
 
+counter = 0  # to report number of sp created
 for i in range(len(params["beta_classes"])):
     for regType, p, n in params["pd"]:
         fname = "output/npy_files/"
@@ -60,5 +62,11 @@ for i in range(len(params["beta_classes"])):
                         "beta": params["beta_arrs"][i][beta_idx],
                         "beta_idx": beta_idx,
                         "var_beta": params["var_betas"][i],
+                        "max_betas": get_max_betas(max_beta_dict, regType, p, n, reverse=True),
                     }
                 ).init()
+                counter += 1
+                if counter % 200 == 0:
+                    print(f"Progresss: {counter} state points created")
+
+print(f"Total Progresss: {counter} state points created")

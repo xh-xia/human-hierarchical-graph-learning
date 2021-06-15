@@ -74,10 +74,11 @@ class GLsim:
         if "var_beta" in kwargs:
             if beta < 0:
                 if isinstance(kwargs["var_beta"], bool) and kwargs["var_beta"]:
-                    self.beta = step_funct(10 ** (-3), 10 ** (1), -round(beta), steps_tot)
+                    self.beta = step_funct(kwargs["max_betas"], steps_tot)
                 elif isinstance(kwargs["var_beta"], (list, np.ndarray)):
+                    raise Exception(f"<kwargs['var_beta']> being non-bool is currently deprecated")
                     # NOTE: we unpack kwargs["var_beta"] (list), assuming it has only 2 numbers
-                    self.beta = step_funct(*kwargs["var_beta"], -round(beta), steps_tot)
+                    # self.beta = step_funct(-round(beta), steps_tot, *kwargs["var_beta"])
         # load transition prob matrix & masks
         # self.P, self.masks = load_Sier(regType, p, n)
         self.P, _ = load_Sier(regType, p, n)

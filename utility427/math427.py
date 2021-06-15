@@ -55,13 +55,16 @@ def get_factors(x, neg=False, ub=None):
     return factors
 
 
-def step_funct(val_min, val_max, num, steps_tot):
+def step_funct(num, steps_tot, val_min=None, val_max=None):
     """generate a list of vals (for discrete monotonic step functions)
 
     Args
     ----
-    num (int): number of steps, each with a unique val
-    steps_tot (int): number of total steps;
+    - num (int or 1D-list or np.arr):
+        - int: number of steps, each with a unique val
+        - 1D-list or np.arr: ignore val_min, val_max
+            instead, use vals in num; len(num) = number of steps
+    - steps_tot (int): number of total steps;
         has to be int multiple of <num> (i.e., <num> has to be a factor of <steps_tot>)
 
     Intermediary
@@ -73,17 +76,27 @@ def step_funct(val_min, val_max, num, steps_tot):
 
     Return
     ------
-    arr (np.arr): [val_min, val_min + d, ..., val_min + (num - 1) * d]
-    where each entry is repeated <rep> times
+    - arr (np.arr): [val_min, val_min + d, ..., val_min + (num - 1) * d]
+        where each entry is repeated <rep> times
     """
-    if not is_pos_int(num):
-        raise TypeError("<num> has to be a positive integer")
-    arr = np.linspace(val_min, val_max, num, endpoint=True)
-    rep, rep_last = divmod(steps_tot, num)
-    if rep_last != 0:  # <steps_tot> is not int multiple of <num>
-        raise NotImplementedError(f"<steps_tot>={steps_tot} is not int multiple of <num>={num}")
+    if is_pos_int(num):
+        if val_min is None or val_max is None:
+            raise Exception("both <val_min> and <val_max> have to be supplied")
+        arr = np.linspace(val_min, val_max, num, endpoint=True)
+        rep, rep_last = divmod(steps_tot, num)
+        if rep_last != 0:  # <steps_tot> is not int multiple of <num>
+            raise NotImplementedError(f"<steps_tot>={steps_tot} is not int multiple of <num>={num}")
 
-    return np.repeat(arr, [rep] * num)
+        return np.repeat(arr, [rep] * num)
+    elif isinstance(num, (list, np.ndarray)):
+        rep, rep_last = divmod(steps_tot, len(num))
+        if rep_last != 0:  # <steps_tot> is not int multiple of <num>
+            msg = f"<steps_tot>={steps_tot} is not int multiple of len(<num>)={len(num)}"
+            raise NotImplementedError(msg)
+
+        return np.repeat(num, [rep] * len(num))
+    else:
+        raise TypeError("<num> has to be a positive integer, 1D-list, or np.arr")
 
 
 def findNearest(arr, val, is_arg=True):

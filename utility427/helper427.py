@@ -124,10 +124,16 @@ def mkdir_p(dir_):
             raise
 
 
-def get_params(params=None, fname="params"):
+def get_params(params=None, fname="params", default_dir=True):
     """parameter management | return a dict
 
-    assume the parameter file is in script dir of running script + "\\input"
+    Kwargs
+    ------
+    - default_dir (bool):
+        if True, assume the parameter file is in script dir of running script + "\\input"
+
+    Return
+    ------
     it will either:
     1) create a json file named f"{fname}.json" from params if it doesn't exist
     2) read a json file named f"{fname}.json" if it exists
@@ -142,9 +148,12 @@ def get_params(params=None, fname="params"):
     """
     import json
 
-    dir_ = set_dir427(depth=2) + "\\input\\"
-    mkdir_p(dir_)  # create folder if it doesn't exist
-    dir_ += fname + ".json"  # full absolute path of the json file
+    if default_dir:
+        dir_ = set_dir427(depth=2) + "\\input\\"
+        mkdir_p(dir_)  # create folder if it doesn't exist
+        dir_ += fname + ".json"  # full absolute path of the json file
+    else:
+        dir_ = fname + ".json"  # relative path
 
     try:
         with open(dir_) as f:
