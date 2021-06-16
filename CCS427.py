@@ -16,7 +16,6 @@ from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427  # mat
 from utility427.plt427 import load_CCS_stat, save_Masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params
-from stims427 import Hamiltonian_cycle
 
 
 def main_Sierpinski427():
