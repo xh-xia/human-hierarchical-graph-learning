@@ -22,7 +22,7 @@ def main_Sierpinski427():
         for p in hierLists[1]:
             for lv in hierLists[2]:
                 GTDict = make_SierpinskiGraph427(p, lv, norm = True, regType = regType)
-                save_Masks(GTDict, regType, p, lv)
+                save_masks(GTDict, regType, p, lv)
                 #continue
                 A_hat_list = [make_A_hat_beta(GTDict['A'], beta) for beta in beta_arr]
                 CCS_dict = CCS_analysis(A_hat_list, GTDict, beta_arr, sim = True, approx = True)
@@ -64,7 +64,7 @@ def make_level_masks(GTDict):
         masks[f"{'lv'}{GTDict['lvList'][k]}"][j,i]=1 # undirected graph
     return masks
 
-def save_Masks(GTDict, regType, p, n):
+def save_masks(GTDict, regType, p, n):
     Sierpinski_dict = dict()
     Sierpinski_dict['A'] = GTDict['A']
     Sierpinski_dict['masks'] = make_level_masks(GTDict)

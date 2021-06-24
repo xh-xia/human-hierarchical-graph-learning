@@ -13,7 +13,7 @@ from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_de
 from utility427.math427 import findNearest, rank_eigvals, W_norm, np
 from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec  # matplotlib
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427  # matplotlib helpers
-from utility427.plt427 import load_CCS_stat, save_Masks
+from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params
 
@@ -112,7 +112,7 @@ def plot_side(tup, beta_arr):
     dd = dict()  # = DataDict = {(regType,p,lv):{'GTDict'=GTDict,etc.}}
     dd[tup] = dict()
     dd[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
-    save_Masks(dd[tup]["GTDict"], regType, p, lv)
+    save_masks(dd[tup]["GTDict"], regType, p, lv)
     dd[tup]["A_hat_list"] = [
         make_A_hat_beta(dd[tup]["GTDict"]["A"], beta) for beta in beta_arr
     ]

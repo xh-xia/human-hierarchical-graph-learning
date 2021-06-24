@@ -135,7 +135,7 @@ def make_level_masks(GTDict):
     return masks
 
 
-def save_Masks(GTDict, regType, p, n):
+def save_masks(GTDict, regType, p, n):
     set_dir427(depth=2)  # set cwd to CCS427.py dir
     fname = "output\\npy_files\\"
     mkdir_p(fname)
