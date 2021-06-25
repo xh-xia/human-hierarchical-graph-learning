@@ -43,8 +43,8 @@ def main_Sierpinski427():
     # overwrite key_class
     # can be whatever as long as it (was once defined in params.json) was run in sim427
     # otherwise will be error in load_CCS_stat(), which loads results generated from sim427
-    # p["key_class"] = "max_beta"
-    p["key_class"] = "max_beta_hi2lo"
+    p["key_class"] = "max_beta"
+    # p["key_class"] = "max_beta_hi2lo"
 
     make_sim_params(p)
     p.update(get_params(fname="params_CCS427"))
@@ -614,7 +614,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
             ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
     
     def temp_a2():  # draw total CCS: analytical, noise constant, noise dynamic
-        styles1.update({"label": "Total CCS", "color": cmap(0)})
+        styles1.update(dict(label="Total CCS", color=cmap(0)))
         ts1 = slice(0, n_level)
         ysal = np.sum(CCS_arr[:, CCS_type_slice, ts1], axis=1)  # sum across levels
         ax.plot(x, ysal, **styles1)  # plot analytical curve
@@ -657,6 +657,16 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
         kw_text.update(dict(color=cmap(0), xy=(xmaxs, ymaxs), xytext=(0.50, 0.05)))
         ax.annotate(texts, **kw_text)
         return xmaxs
+    
+    def temp_b3():  # annotate total CCS plot with mean beta for var_beta
+        temp_fname = set_dir427() + "\\sim427\\input\\params_max_beta"
+        max_beta_dict = get_params(fname=temp_fname, default_dir=False)  # from hi to low
+        beta_mean = np.mean(max_beta_dict[f"{regType},{p},{n}"])
+        blue_ = "cornflowerblue"
+        styles3 = dict(label=r"mean $\beta$", color=blue_)
+        ax.plot((beta_mean, beta_mean), ax.get_ylim(), "--", zorder=0, **styles3)
+        kw_text.update(dict(color=blue_, xy=(beta_mean, ax.get_ylim()[0]), xytext=(0.75, 0.05)))
+        ax.annotate(f"{beta_mean:.3f}", **kw_text)
 
     # argmax = beta that maximizes CCS at different permissible levels
     arrowprops = dict(arrowstyle="simple", facecolor="grey", edgecolor="grey")
@@ -697,6 +707,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
                 delta2 = 0.75  # for params=(3,5,3) max total CCS is ~2.70
         ax.set_ylim((n_level-0.1, n_level + delta2))
         ax.plot(ax.get_xlim(), (n_level, n_level), "--", color="grey", zorder=0)
+        temp_b3()
     else:
         raise NotImplementedError(f"<CCS_plot_type>=\"{CCS_plot_type}\" is not implemented yet")
 
