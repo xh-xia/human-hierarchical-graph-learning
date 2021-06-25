@@ -100,7 +100,7 @@ def make_sim_params(params):
     hierDict = dict()
     hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]]
-    if params["key_class"] in ["reg_n_p", "max_beta"]:
+    if params["key_class"].startswith(("reg_n_p", "max_beta")):
         params["pd"] = unique_iter(
             chain.from_iterable([product(*hierDict["reg_n"]), product(*hierDict["reg_p"])])
         )

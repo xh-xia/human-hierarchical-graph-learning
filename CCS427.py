@@ -21,9 +21,12 @@ from utility427.sim_params427 import make_sim_params
 def main_Sierpinski427():
     """
     get parameters from params_CCS427.json:
-    - err_type (str): "std" or "ste", the type of spread of CCS
-    - CCS_type (str): "mean" or "std", the type of stat as part of def of CCS
+    - err_type (str): "std" or "ste", type of spread of CCS
+    - CCS_type (str): "mean" or "std", type of stat as part of def of CCS
         use mean for the most part, as std is not steady
+    - CCS_plot_type (str): "CCS" or "sum" or "both", type of y in CCS plot
+        - CCS: vanilla method; show all level
+        - sum: show only the sum of CCS across levels
     - dpi (int): used in plot generation; if None, default to both 300 and lossless .pdf
     - sub_fo_name (str): folder in "input" folder containing CCS_stat .npy files
 
@@ -37,6 +40,12 @@ def main_Sierpinski427():
     """
     temp_dir = set_dir427(dir_ = set_dir427() + "\\sim427\\input")
     p = get_params(fname=temp_dir + "\\params", default_dir=False)
+    # overwrite key_class
+    # can be whatever as long as it (was once defined in params.json) was run in sim427
+    # otherwise will be error in load_CCS_stat(), which loads results generated from sim427
+    # p["key_class"] = "max_beta"
+    p["key_class"] = "max_beta_hi2lo"
+
     make_sim_params(p)
     p.update(get_params(fname="params_CCS427"))
     set_dir427()  # go back to script dir
@@ -52,6 +61,7 @@ def main_Sierpinski427():
     kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
     kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
+    kw_loop.update(dict(CCS_plot_type=p["CCS_plot_type"]))
 
     # single-processing | w/o mp in plot_main() ~155 sec
     for beta_class in p["beta_classes"]:
@@ -63,7 +73,7 @@ def main_Sierpinski427():
 
 @partial_427_decorator
 def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
-              beta_arr, err_type, colors, dpi, mp=False):
+              beta_arr, err_type, CCS_plot_type, colors, dpi, mp=False):
     """this function is I/O bound | suitable for multi-threading
 
     Kwarg
@@ -91,7 +101,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
 
         kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
         kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
-        kw_plot.update(dict(sub_folder_name=beta_class))
+        kw_plot.update(dict(CCS_plot_type=CCS_plot_type, sub_folder_name=key_class))
         plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
 
 
@@ -322,7 +332,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
 
 def plot_Graph_CCS(
     DD, beta_arr, key, CCS_stat=None, CCS_type="mean", err_type="ste",
-    colors=None, dpi=None, regCCS=False, sub_folder_name=""
+    CCS_plot_type="CCS", colors=None, dpi=None, regCCS=False, sub_folder_name=""
 ):
     """It produces both CCS plot and Graph (node-edge graph, not graph graph) plot
 
@@ -338,6 +348,9 @@ def plot_Graph_CCS(
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
+    - CCS_plot_type (str):
+        - "CCS": vanilla
+        - "sum": sum of CCS across levels
     - colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
@@ -418,6 +431,7 @@ def plot_Graph_CCS(
                 params = DD_keys[i + 3 * regType]
 
                 kw2 = dict(ax=axes[f"CCS_reg{regType}"][i], x=beta_arr)
+                kw2.update(dict(CCS_plot_type=CCS_plot_type))
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
                 kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
                 kw2.update(dict(is_log=True, colors=colors, regCCS=regType))
@@ -436,6 +450,7 @@ def plot_Graph_CCS(
             kw3.update(dict(nodeList=DD[params]["Sier"].nodeList, GTDict=DD[params]["GTDict"]))
             ax_Graph(**kw3)
             kw4 = dict(ax=axes["CCS"][i], x=beta_arr, CCS_arr=DD[params]["CCS_arr"], params=params)
+            kw4.update(dict(CCS_plot_type=CCS_plot_type))
             kw4.update(dict(key=key, noise=CCS_stat, err_type=err_type, CCS_type=CCS_type))
             kw4.update(dict(show_sim_param=i == 1, is_log=True, colors=colors, dpi=dpi, regCCS=3))
             ax_CCS(**kw4)
@@ -463,7 +478,7 @@ def plot_Graph_CCS(
         saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
 
 
-def ax_CCS(ax, x, CCS_arr, params, key,
+def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
            noise=None, varb=False, err_type='ste', CCS_type='mean', show_sim_param=False,
            is_log=True, colors=None, dpi=None, regCCS=None):
     """
@@ -476,6 +491,21 @@ def ax_CCS(ax, x, CCS_arr, params, key,
             0: default Sierpiński graph
             x: Sierpiński-like graph of type x regularization
     - key (str): 'n','p','reg_n', or 'reg_p', this only affects ax.set_ylim() line
+
+    Kwargs
+    ------
+    - CCS_plot_type (str):
+        - "CCS": vanilla
+        - "sum": sum of CCS across levels
+            propagation of uncertainty is involved;
+            f = aA + bB | s=sd | sA=sd for A | sAB=cov for A & B (correlation)
+            s = sqrt(a^2*sA^2 + b^2*sB^2 + 2ab*sAB)
+            even though input could be standard error, output is standard deviation (assumption 2)
+            assumptions:
+            1. errors for different levels are uncorrelated (could calculate it in RW_CCS_stat.py)
+            2. same formula for both standard deviation and standard error
+            f = A + B
+            then s = sqrt(sA^2 + sB^2)
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
     - varb (bool): whether we draw negative beta (variable beta) or not
@@ -524,6 +554,8 @@ def ax_CCS(ax, x, CCS_arr, params, key,
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
     xlabel = r"Shuffling Parameter $\beta$"
     ylabel = "Ratio of Means of Two Consecutive Levels"
+    if CCS_plot_type == "sum":
+        ylabel = "Sum of CCS Across Levels"
     if regType in [0, 1, 2, 3]:
         title = fr"Cross-Cluster Surprisal of $^{regType}S_{p:d}^{n:d}$"
     else:
@@ -557,8 +589,10 @@ def ax_CCS(ax, x, CCS_arr, params, key,
             bs = -1  # force use last val
         # bs1 = slice(bs, None)  # if no <0 beta, slice(bs, None) = [0:], which is >0 beta
         bs2 = slice(0, d + bs)  # get >0 beta slice object
+
     styles1 = dict(alpha= 0.74, linewidth= 2)
-    for i in range(n_level):
+
+    def temp_a1(i):  # draw CCS: analytical, noise constant, noise dynamic
         styles1.update({"label": f"lv{i+1}/lv{i+2}", "color": cmap(i)})
         ax.plot(x, CCS_arr[:, CCS_type_slice, i], **styles1)  # plot analytical curve
         if noise is not None:  # put scatter points of simulated results in
@@ -578,14 +612,34 @@ def ax_CCS(ax, x, CCS_arr, params, key,
             kw_erb.update(dict(y=noise["mean"][params][-1, 3 + i, bs2]))
             kw_erb.update(dict(yerr=noise[err_type][params][-1, 3 + i, bs2]))
             ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
+    
+    def temp_a2():  # draw total CCS: analytical, noise constant, noise dynamic
+        styles1.update({"label": "Total CCS", "color": cmap(0)})
+        ts1 = slice(0, n_level)
+        ysal = np.sum(CCS_arr[:, CCS_type_slice, ts1], axis=1)  # sum across levels
+        ax.plot(x, ysal, **styles1)  # plot analytical curve
+        if noise is not None:  # put scatter points of simulated results in
+            ts2 = slice(3, 3 + n_level)
+            if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
+                kw1 = dict(color=cmap(0), zorder=1)
+                ysal_mean = np.sum(noise["mean"][params][-1, ts2, bs], axis=0)
+                ysal_err = np.sqrt(np.sum(noise[err_type][params][-1, ts2, bs]**2, axis=0))
+                ax.plot(ax.get_xlim(), [ysal_mean] * 2, **kw1)  # draw line
+                kw1.update(dict(y1 = [ysal_mean - ysal_err] * 2, y2 = [ysal_mean + ysal_err] * 2))
+                ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
+            # plot fixed beta (scatter plot)
+            styles2 = dict(linestyle="None", capsize=4.0, marker=".", markersize=11)
+            styles2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
+            styles2.update(dict(markeredgecolor=cmap(0), markerfacecolor=cmap(0), ecolor=cmap(0)))
+            # styles2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
+            kw_erb = dict(x=noise["mean"][params][-1, 0, bs2])
+            kw_erb.update(dict(
+                y=np.sum(noise["mean"][params][-1, ts2, bs2], axis=0),
+                yerr=np.sqrt(np.sum(noise[err_type][params][-1, ts2, bs2]**2, axis=0))
+                ))
+            ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
 
-    # argmax = beta that maximizes CCS at different permissible levels
-    xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
-    arrowprops = dict(arrowstyle="simple", facecolor="grey", edgecolor="grey")
-    arrowprops.update(dict(linewidth=1 / 3, alpha=0.74))
-    kw_text = dict(textcoords="axes fraction", fontsize=11, arrowprops=arrowprops)
-    kw_text.update(dict(ha="center", va="center"))
-    for i in range(0, n - 1):  # put peak val on plot
+    def temp_b1(i):  # annotate CCS plot with maxima
         xmaxs[i] = x[np.argmax(CCS_arr[:, CCS_type_slice, i])]
         ymaxs[i] = np.max(CCS_arr[:, CCS_type_slice, i])
         # texts[i] = f"({xmaxs[i]:.3f},{ymaxs[i]:.3f})"  # show both beta and CCS
@@ -593,18 +647,70 @@ def ax_CCS(ax, x, CCS_arr, params, key,
         kw_text.update(dict(color=cmap(i), xy=(xmaxs[i], ymaxs[i])))
         kw_text.update(dict(xytext=(0.85 - i * 0.2, 0.05)))
         ax.annotate(texts[i], **kw_text)
+
+    def temp_b2():  # annotate total CCS plot with maxima
+        ysal = np.sum(CCS_arr[:, CCS_type_slice, :n_level], axis=1)  # sum across levels
+        xmaxs = x[np.argmax(ysal)]
+        ymaxs = np.max(ysal)
+        # texts = f"({xmaxs:.3f},{ymaxs:.3f})"  # show both beta and CCS
+        texts = f"{xmaxs:.3f}"  # show only beta
+        kw_text.update(dict(color=cmap(0), xy=(xmaxs, ymaxs), xytext=(0.50, 0.05)))
+        ax.annotate(texts, **kw_text)
+        return xmaxs
+
+    # argmax = beta that maximizes CCS at different permissible levels
+    arrowprops = dict(arrowstyle="simple", facecolor="grey", edgecolor="grey")
+    arrowprops.update(dict(linewidth=1 / 3, alpha=0.74))
+    kw_text = dict(textcoords="axes fraction", fontsize=11, arrowprops=arrowprops)
+    kw_text.update(dict(ha="center", va="center"))
+
+    if CCS_plot_type == "CCS":  # plot vanilla CCS graph
+        xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
+        for i in range(n_level):  # n_level is always n-1; see earlier code for why this is true
+            temp_a1(i)
+            temp_b1(i)  # put peak val on plot
+
+        if key in ["n", "reg_n"]:
+            ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
+        else:
+            ax.set_ylim((0.9, 1.63))  # for regType=3, p=5, n=3 max CCS is about 1.63
+        ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
+    elif CCS_plot_type == "sum":  # plot summation CCS graph
+        temp_a2()
+        xmaxs = temp_b2()
+
+        if key in ["n", "reg_n"]:
+            delta2 = 0.5
+            if n == 3:
+                delta2 = 0.36  # for params=(3,3,3) max total CCS is ~2.36
+            elif n == 4:
+                delta2 = 0.50  # for params=(3,3,4) max total CCS is ~3.30
+            elif n == 5:
+                delta2 = 0.80  # for params=(3,3,5) max total CCS is ~4.25
+        else:
+            delta2 = 0.5
+            if p == 3:
+                delta2 = 0.36  # for params=(3,3,3) max total CCS is ~2.36
+            elif p == 4:
+                delta2 = 0.52  # for params=(3,4,3) max total CCS is ~2.52
+            elif p == 5:
+                delta2 = 0.75  # for params=(3,5,3) max total CCS is ~2.70
+        ax.set_ylim((n_level-0.1, n_level + delta2))
+        ax.plot(ax.get_xlim(), (n_level, n_level), "--", color="grey", zorder=0)
+    else:
+        raise NotImplementedError(f"<CCS_plot_type>=\"{CCS_plot_type}\" is not implemented yet")
+
+
+    ax.set_title(title, fontsize=17)
     if regCCS == 3:  # only have xlabel if bottom row
         ax.set_xlabel(xlabel, fontsize=11)
     ax.set_ylabel(ylabel, fontsize=11)
-    if key in ["n", "reg_n"]:
-        ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
-    else:
-        ax.set_ylim((0.9, 1.63))  # for regType=3, p=5, n=3 max CCS is about 1.63
-    ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
-    ax.set_title(title, fontsize=17)
     if is_log:
         ax.set_xscale("log")  # set x to log scale
-        ax.legend(loc="upper left")
+        if CCS_plot_type == "CCS":
+            ax.legend(loc="upper left")
+        elif CCS_plot_type == "sum":
+            ax.legend(loc="lower left")
     else:
         ax.legend(loc="center right")
     ax.grid(False)

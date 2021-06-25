@@ -26,4 +26,3 @@ sim427/input/
 sim427/output/
 __pycache__/
 *.code-workspace
-gitignore-copy*

@@ -25,7 +25,11 @@ reg_n_p: 20 cases of combination from:
 implemented variable beta case: with num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
 """
 params = make_sim_params(get_params())  # load params.json as dict, use it to create sim params
-max_beta_dict = get_params(fname="params_max_beta")
+max_beta_dict = get_params(fname="params_max_beta")  # from hi to low
+
+reverse = True  # default is reversed, meaning lo2hi
+if "hi2lo" in params["key_class"]:  # if key_class contains hi2lo, don't reverse
+    reverse = False
 
 RNG = np.random.default_rng(seed=params["SEED"])
 
@@ -62,7 +66,7 @@ for i in range(len(params["beta_classes"])):
                         "beta": params["beta_arrs"][i][beta_idx],
                         "beta_idx": beta_idx,
                         "var_beta": params["var_betas"][i],
-                        "max_betas": get_max_betas(max_beta_dict, regType, p, n, reverse=True),
+                        "max_betas": get_max_betas(max_beta_dict, regType, p, n, reverse=reverse),
                     }
                 ).init()
                 counter += 1

@@ -47,7 +47,7 @@ def main_CCS_stat():
     # change some parameters
     # temp["n_agents"], temp["key_class"] = 10, "r"  # ~ 6 sec (may be inaccurate)
     # temp["n_agents"], temp["key_class"] = 10, "reg_n_p"  # ~ 7 sec (may be inaccurate)
-    temp["n_agents"], temp["key_class"] = 100, "max_beta"  # 28000 sp ~ 200 sec
+    # temp["n_agents"], temp["key_class"] = 100, "max_beta"  # 28000 sp ~ 200 sec
     params = make_sim_params(temp)
     CCS_type = "mean"  # 'mean' or 'std'
     if CCS_type == "mean":
