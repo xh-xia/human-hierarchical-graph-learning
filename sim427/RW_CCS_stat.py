@@ -40,7 +40,7 @@ def print_progress(counter, tot=28000):
 
 def main_CCS_stat():
     is_operation = True  # whether CCS_compute is done as @operation in signac
-    sub_folder_name = "step_funct_max_beta"  # folder inside output folder to store all "var_betas" CCS_stat
+    sub_folder_name = "study_low_beta"  # folder inside output folder to store all "var_betas" CCS_stat
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()

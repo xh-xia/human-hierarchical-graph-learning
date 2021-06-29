@@ -26,7 +26,7 @@ def make_sim_params(params):
     Arg - params (dict)
     -------------------
     NOTE: params should be read from params.json file, which should be pure json w/o comments
-    # - key_classes (list): list of key_class (not implemented)
+    - key_classes (list): list of key_class (not implemented)
         - key_class (str): type of simulation run; encoding regType, p, n parameters
             e.g., "reg_n_p", "r"
     - n_agents (int): num of agents per param (including beta)
@@ -104,7 +104,7 @@ def make_sim_params(params):
         params["pd"] = unique_iter(
             chain.from_iterable([product(*hierDict["reg_n"]), product(*hierDict["reg_p"])])
         )
-    elif params["key_class"] == "r":
+    else:  # for other simulations like "r" or "study_low_beta"
         params["pd"] = product([0, 1, 2, 3], [3], [3])
     params["pd"] = list(params["pd"])  # to prevent from exhausting generator
     return params

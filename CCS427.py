@@ -43,7 +43,7 @@ def main_Sierpinski427():
     # overwrite key_class
     # can be whatever as long as it (was once defined in params.json) was run in sim427
     # otherwise will be error in load_CCS_stat(), which loads results generated from sim427
-    p["key_class"] = "max_beta"
+    # p["key_class"] = "max_beta"
     # p["key_class"] = "max_beta_hi2lo"
 
     make_sim_params(p)
@@ -55,8 +55,8 @@ def main_Sierpinski427():
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
-    hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
-    hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
+    # hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
+    # hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
     kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
     kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
@@ -102,7 +102,11 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
         kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
         kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=len(key) > 1))
         kw_plot.update(dict(CCS_plot_type=CCS_plot_type, sub_folder_name=key_class))
-        plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
+
+        n_sample = CCS_stat["mean"][list(DD.keys())[0]].shape[0]
+        for spl in range(n_sample):
+            kw_plot.update(dict(spl=spl))
+            plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
 
 
 @partial_427_decorator
@@ -331,7 +335,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
 
 
 def plot_Graph_CCS(
-    DD, beta_arr, key, CCS_stat=None, CCS_type="mean", err_type="ste",
+    DD, beta_arr, key, CCS_stat=None, spl=-1, CCS_type="mean", err_type="ste",
     CCS_plot_type="CCS", colors=None, dpi=None, regCCS=False, sub_folder_name=""
 ):
     """It produces both CCS plot and Graph (node-edge graph, not graph graph) plot
@@ -346,6 +350,7 @@ def plot_Graph_CCS(
     ------
     - CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
+    - spl (int): what index of sample to draw data from CCS_stat; -1 means the last sample
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
     - CCS_plot_type (str):
@@ -376,7 +381,7 @@ def plot_Graph_CCS(
     DD_keys = sorted(DD.keys(), reverse=False)  # ascending (default)
     if CCS_stat is not None:
         # generate variable beta version if there is negative beta (just need to check last item)
-        if CCS_stat["mean"][DD_keys[0]][-1, 0, -1] < 0:  # 2nd dim idx=0 is beta dim
+        if CCS_stat["mean"][DD_keys[0]][spl, 0, -1] < 0:  # 2nd dim idx=0 is beta dim
             varb = True
 
     if colors is None:
@@ -417,8 +422,8 @@ def plot_Graph_CCS(
     fname = f"CCS_{key}"
     if CCS_stat is not None:
         # both group size and walk length are the same across all beta
-        n_agents = round(CCS_stat["mean"][DD_keys[0]][-1, 1, 0])
-        n_steps = round(CCS_stat["mean"][DD_keys[0]][-1, 2, 0])
+        n_agents = round(CCS_stat["mean"][DD_keys[0]][spl, 1, 0])
+        n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
         fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
 
     if regCCS:  # assuming DD_keys has 12 entries
@@ -434,7 +439,7 @@ def plot_Graph_CCS(
                 kw2.update(dict(CCS_plot_type=CCS_plot_type))
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
                 kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
-                kw2.update(dict(is_log=True, colors=colors, regCCS=regType))
+                kw2.update(dict(spl=spl, is_log=True, colors=colors, regCCS=regType))
                 ax_CCS(**kw2)
                 if varb:
                     kw2.update(dict(ax=axes2[f"CCS_reg{regType}"][i], varb=varb))
@@ -450,7 +455,7 @@ def plot_Graph_CCS(
             kw3.update(dict(nodeList=DD[params]["Sier"].nodeList, GTDict=DD[params]["GTDict"]))
             ax_Graph(**kw3)
             kw4 = dict(ax=axes["CCS"][i], x=beta_arr, CCS_arr=DD[params]["CCS_arr"], params=params)
-            kw4.update(dict(CCS_plot_type=CCS_plot_type))
+            kw4.update(dict(spl=spl, CCS_plot_type=CCS_plot_type))
             kw4.update(dict(key=key, noise=CCS_stat, err_type=err_type, CCS_type=CCS_type))
             kw4.update(dict(show_sim_param=i == 1, is_log=True, colors=colors, dpi=dpi, regCCS=3))
             ax_CCS(**kw4)
@@ -479,7 +484,7 @@ def plot_Graph_CCS(
 
 
 def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
-           noise=None, varb=False, err_type='ste', CCS_type='mean', show_sim_param=False,
+           noise=None, spl=-1, varb=False, err_type='ste', CCS_type='mean', show_sim_param=False,
            is_log=True, colors=None, dpi=None, regCCS=None):
     """
     Args
@@ -508,6 +513,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
             then s = sqrt(sA^2 + sB^2)
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
+    - spl (int): what index of sample to draw data from CCS_stat; -1 means the last sample
     - varb (bool): whether we draw negative beta (variable beta) or not
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
@@ -563,8 +569,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
 
     if noise is not None and show_sim_param:
         styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax.transAxes)
-        n_agents = noise["mean"][params][-1, 1, 0]  # since all β have same group size, take 0
-        n_steps = noise["mean"][params][-1, 2, 0]  # ditto but w/ walk length
+        n_agents = noise["mean"][params][spl, 1, 0]  # since all β have same group size, take 0
+        n_steps = noise["mean"][params][spl, 2, 0]  # ditto but w/ walk length
         topy, s = 0.94, 0.06
         beta_type = "both" if varb else "constant"
         ax.text(0.5, topy, f"n_agents={n_agents:.0f}", **styles_txt)
@@ -577,13 +583,13 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
         bs = None  # find where <0 beta starts (negative index)
         d = noise["mean"][params].shape[2]  # total number of beta
         for i in range(-1, -d - 1, -1):  # count from right because that's where <0 beta lies
-            if noise["mean"][params][-1, 0, i] > 0:
+            if noise["mean"][params][spl, 0, i] > 0:
                 bs = i + 1
                 break
         if bs != -1:
             # import warnings  # may want to comment the warnings out since it gets verbose
-            # msg = "only <noise[\"mean\"][params][-1, 0, -1]> can be < 0\n"
-            # msg += f"currently <noise[\"mean\"][params][-1, 0, {bs}:]> are all < 0\n"
+            # msg = "only <noise[\"mean\"][params][spl, 0, -1]> can be < 0\n"
+            # msg += f"currently <noise[\"mean\"][params][spl, 0, {bs}:]> are all < 0\n"
             # msg += "using last val instead"
             # warnings.warn(msg)
             bs = -1  # force use last val
@@ -598,8 +604,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
         if noise is not None:  # put scatter points of simulated results in
             if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
                 kw1 = dict(color=cmap(i), zorder=1)
-                y_mean = noise["mean"][params][-1, 3 + i, bs]
-                y_err = noise[err_type][params][-1, 3 + i, bs]
+                y_mean = noise["mean"][params][spl, 3 + i, bs]
+                y_err = noise[err_type][params][spl, 3 + i, bs]
                 ax.plot(ax.get_xlim(), [y_mean] * 2, **kw1)  # draw line
                 kw1.update(dict(y1 = [y_mean - y_err] * 2, y2 = [y_mean + y_err] * 2))
                 ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
@@ -608,9 +614,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
             styles2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
             styles2.update(dict(markeredgecolor=cmap(i), markerfacecolor=cmap(i), ecolor=cmap(i)))
             # styles2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-            kw_erb = dict(x=noise["mean"][params][-1, 0, bs2])
-            kw_erb.update(dict(y=noise["mean"][params][-1, 3 + i, bs2]))
-            kw_erb.update(dict(yerr=noise[err_type][params][-1, 3 + i, bs2]))
+            kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
+            kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
+            kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
             ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
     
     def temp_a2():  # draw total CCS: analytical, noise constant, noise dynamic
@@ -622,8 +628,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
             ts2 = slice(3, 3 + n_level)
             if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
                 kw1 = dict(color=cmap(0), zorder=1)
-                ysal_mean = np.sum(noise["mean"][params][-1, ts2, bs], axis=0)
-                ysal_err = np.sqrt(np.sum(noise[err_type][params][-1, ts2, bs]**2, axis=0))
+                ysal_mean = np.sum(noise["mean"][params][spl, ts2, bs], axis=0)
+                ysal_err = np.sqrt(np.sum(noise[err_type][params][spl, ts2, bs]**2, axis=0))
                 ax.plot(ax.get_xlim(), [ysal_mean] * 2, **kw1)  # draw line
                 kw1.update(dict(y1 = [ysal_mean - ysal_err] * 2, y2 = [ysal_mean + ysal_err] * 2))
                 ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
@@ -632,10 +638,10 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS",
             styles2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
             styles2.update(dict(markeredgecolor=cmap(0), markerfacecolor=cmap(0), ecolor=cmap(0)))
             # styles2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-            kw_erb = dict(x=noise["mean"][params][-1, 0, bs2])
+            kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
             kw_erb.update(dict(
-                y=np.sum(noise["mean"][params][-1, ts2, bs2], axis=0),
-                yerr=np.sqrt(np.sum(noise[err_type][params][-1, ts2, bs2]**2, axis=0))
+                y=np.sum(noise["mean"][params][spl, ts2, bs2], axis=0),
+                yerr=np.sqrt(np.sum(noise[err_type][params][spl, ts2, bs2]**2, axis=0))
                 ))
             ax.errorbar(**kw_erb, **styles2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
 
