@@ -15,7 +15,7 @@ import sys, os, inspect
 temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 sys.path.insert(0, temp_cwd)
 from helper427 import set_dir427, mkdir_p
-from math427 import np
+from math427 import log_b, np
 sys.path.pop(0)  # remove script dir from sys.path
 
 """
@@ -96,6 +96,48 @@ def cbrLabel427(cax, title):
         "rotation": "vertical",
     }
     cax.text(-0.9, 0.5, title, **kwargs)
+
+
+def get_violin_pw(x, x_scale=None):
+    """
+    input 1D arr of x-axis values
+    output positions and widths vector for ax.violinplot(positions, widths)
+    such that even if the final plot is in log scale (assuming in that case x_scale is not None),
+    the widths of the violin is still symmetric,
+    and to achieve this we would output linear scale violin parameters,
+    and later apply it on twin axis (e.g., twiny, a separate x-axis)
+
+    Arg
+    ---
+    - x (arr-like): 1D arr
+    - x_scale: the scale of arr x
+        - None: linear (x[i+1] - x[i] = const)
+        - base (int): exponential with base=`base` (`x[i+1]` / `x[i]` = `base`^const)
+            meaning we assume x was obtained by `base`^x0
+            where x0 is original linear scale arr with x0[i+1] - x0[i] = const
+
+    Note
+    ----
+    from https://matplotlib.org/stable/_modules/matplotlib/axes/_axes.html#Axes.violinplot:
+    # Calculate ranges for statistics lines
+        pmins = -0.25 * np.array(widths) + positions
+        pmaxes = 0.25 * np.array(widths) + positions
+        where positions, pmins, and pmaxes are x-axis values
+    """
+    n = len(x)
+    if n < 3:
+        raise NotImplementedError("len(<x>) has to be >= 3")
+
+    def temp_is_linear(arr):  # check if arr is linear
+        return np.allclose(arr[:-1], arr[1:], rtol=1.e-07, atol=1.e-10)
+
+    if x_scale is None:
+        w = x[1] - x[0]  # since linear, spacing is the same
+        return x, [w] * n
+    else:
+        x0 = log_b(x, x_scale)  # de-exponentiate it by logarithmizing it
+        w = x0[1] - x0[0]  # since x0 is linear, spacing is the same
+        return x0, [w] * n
 
 
 """

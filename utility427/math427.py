@@ -8,6 +8,12 @@ Created: Monday, ‎June ‎7, ‎2021, ‏‎6:38:14 PM (EDT)
 import numpy as np
 
 
+def log_b(x, b):  # return base b logarithm of x
+    if b <= 0:
+        raise ValueError("base <b> has to be strictly positive")
+    return np.log(x) / np.log(b)
+
+
 def is_pos_int(x):
     """ check if x is a positive integer """
     if not isinstance(x, int):

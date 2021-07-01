@@ -23,15 +23,20 @@ CCS_stat (dict): 3 keys each corresponding to one statistic of CCS:
 "mean", "std", "ste", the value (dict) of them is of the same structure:
 value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     s stands for the s-th sample in counts tensor defined in RW_Graph_Class.py
-    [s,0,:]: beta (so 3rd dim is beta)
+    (2nd dim specifies type of value in the cell; 3rd dim corresponds to different beta)
+    [s,0,:]: beta (like index column for the cells)
     [s,1,:]: group size
     [s,2,:]: steps_sample (time stamps at the time of sampling = walk length)
     [s,3,:]: stat of the group having that beta for CCS at level 1
     ...
     [s,3+n-2,:]: stat of the group having that beta for CCS at level n-1
+"raw" = stat_arr, has value[(regType,p,n)] (4D nparr):
+    [s,l,b,i]: lv l CCS at s-th sample, b-th beta, for i-th agent
 """
 
-
+is_operation = True  # whether CCS_compute is done as @operation in signac
+sub_folder_name = "study_low_beta"  # folder inside output folder to store all "var_betas" CCS_stat
+save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
 
 def print_progress(counter, tot=28000):
     if counter % 1000 == 0:
@@ -39,8 +44,6 @@ def print_progress(counter, tot=28000):
 
 
 def main_CCS_stat():
-    is_operation = True  # whether CCS_compute is done as @operation in signac
-    sub_folder_name = "study_low_beta"  # folder inside output folder to store all "var_betas" CCS_stat
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()
@@ -56,6 +59,8 @@ def main_CCS_stat():
         CCS_type_slice = 1
     CCS_stat = dict()
     CCS_stat["mean"], CCS_stat["std"], CCS_stat["ste"] = dict(), dict(), dict()
+    if save_raw:
+        CCS_stat["raw"] = dict()
     project = sn.get_project()
     n_sample = int(np.floor(params["steps_tot"] / params["sample_period"]))
     for i in range(len(params["beta_classes"])):
@@ -89,6 +94,8 @@ def main_CCS_stat():
                     stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
                     # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
                     #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
+            if save_raw:
+                CCS_stat["raw"][(regType, p, n)] = stat_arr
             nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
             CCS_stat["mean"][(regType, p, n)] = nparr.copy()
             nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
