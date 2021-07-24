@@ -171,6 +171,19 @@ def get_params(params=None, fname="params", default_dir=True):
         return json_dict
 
 
+def is_empty(x):
+    from math import isnan
+
+    if isinstance(x, int):
+        return False
+    elif isinstance(x, str):
+        return len(x) == 0
+    elif isinstance(x, float):
+        return isnan(x)
+    else:
+        raise NotImplementedError(f"type(<x>)={type(x)} is not supported")
+
+
 # endregion
 
 

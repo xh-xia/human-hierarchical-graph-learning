@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 # custom colorbar (https://matplotlib.org/tutorials/colors/colormap-manipulation.html)
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 from matplotlib.gridspec import GridSpec  # for subplots placement manipulation
+from matplotlib.lines import Line2D  # for median legend in violin plots
 
 import sys, os, inspect
 temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))

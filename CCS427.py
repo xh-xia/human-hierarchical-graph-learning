@@ -11,8 +11,8 @@ from concurrent.futures import ThreadPoolExecutor  # for multi-threading
 
 from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_decorator
 from utility427.math427 import log_b, findNearest, rank_eigvals, W_norm, np
-from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec  # matplotlib
-from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_violin_pw  # matplotlib helpers
+from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec, Line2D  # mpl
+from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_violin_pw  # mpl helpers
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params
@@ -48,7 +48,7 @@ def main_Sierpinski427():
     # p["key_class"] = "max_beta_hi2lo"
 
     make_sim_params(p)
-    p.update(get_params(fname="params_CCS427"))
+    p.update(get_params(fname="params_CCS427"))  # get parameters for CCS427.py
     set_dir427()  # go back to script dir
     # add more parameters into p
     p["colors"] = colors_selector(str="5-class Greens")
@@ -352,7 +352,9 @@ def plot_Graph_CCS(
     ------
     - CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
-    - raw_method (str): if "violin", assume CCS_stat has "raw" key
+    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
+        - violin: vanilla violin plot
+        - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
     - spl (int): what index of sample to draw data from CCS_stat; -1 means the last sample
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
@@ -516,7 +518,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             2. same formula for both standard deviation and standard error
             f = A + B
             then s = sqrt(sA^2 + sB^2)
-    - raw_method (str): if "violin", assume CCS_stat has "raw" key
+    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
+        - violin: vanilla violin plot
+        - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
     - spl (int): what index of sample to draw data from CCS_stat; -1 means the last sample
@@ -627,13 +631,17 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
             ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
             if raw_method is None:
-                pass
-            elif raw_method=="violin":  # violin plot (overlaid)
-                # TODO haven't implemented it in temp_a2
+                return 0
+            elif raw_method.startswith("violin"):  # violin plot (overlaid)
+                # TODO haven't implemented it in temp_a2()
+                if raw_method[-6:] == "median" and i == 0:
+                    return 0  # skip if i==0 (i.e., CCS level is 1 (finest level))
                 data_vl = [noise["raw"][params][spl, i, b, :] for b in range(bs2.start, bs2.stop)]
                 pos_vl = noise["mean"][params][spl, 0, bs2]  # beta
                 pos_vl, widths = get_violin_pw(pos_vl, x_scale=x_scale)
                 kw_vl = dict(showmeans=False, showmedians=False, showextrema=False, widths=widths)
+                if raw_method[-6:] == "median":
+                    kw_vl["showmedians"] = True
                 if is_log:  # create a dummy axis and plot violins on that axis
                     ax_vl = ax.twiny()  # instantiate a separate x-axis for equal spacing violins
                     parts = ax_vl.violinplot(data_vl, positions=pos_vl, **kw_vl)
@@ -646,6 +654,11 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
                 for pc in parts['bodies']:
                     pc.set_facecolor(cmap(i))
                     pc.set_alpha(0.27)
+                if raw_method[-6:] == "median":
+                    # red; 4th color in plt.rcParams["axes.prop_cycle"].by_key()["color"]
+                    parts["cmedians"].set_color("#d62728")
+                    parts["cmedians"].set_alpha(1)  # opaque
+                    return Line2D([0, 1], [0, 1], color=parts["cmedians"].get_color()[0])
             else:
                 msg2 = "<raw_method>: currently only supports scatter(None)/violin('violin') plot"
                 raise ValueError(msg2)
@@ -715,7 +728,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     if CCS_plot_type == "CCS":  # plot vanilla CCS graph
         xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
         for i in range(n_level):  # n_level is always n-1; see earlier code for why this is true
-            temp_a1(i)
+            temp_line_ = temp_a1(i)
+            if isinstance(temp_line_, Line2D):
+                temp_line = temp_line_
             temp_b1(i)  # put peak val on plot
 
         if key in ["n", "reg_n"]:
@@ -757,11 +772,16 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     if is_log:
         ax.set_xscale("log")  # set x to log scale
         if CCS_plot_type == "CCS":
-            ax.legend(loc="upper left")
+            loc="upper left"
         elif CCS_plot_type == "sum":
-            ax.legend(loc="lower left")
+            loc="lower left"
     else:
-        ax.legend(loc="center right")
+        loc="center right"
+    temp_li, temp_la = ax.get_legend_handles_labels()
+    if isinstance(temp_line, Line2D):
+        ax.legend([temp_line] + temp_li, ["median"] + temp_la, loc=loc)
+    else:
+        ax.legend(temp_li, temp_la, loc=loc)
     ax.grid(False)
     return xmaxs
 
