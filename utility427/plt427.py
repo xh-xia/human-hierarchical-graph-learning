@@ -26,7 +26,7 @@ sys.path.pop(0)  # remove script dir from sys.path
 """
 
 
-def saveNclose427(fig, fname, dpi=None, sub_folder_name="", makedir=True):
+def saveNclose427(fig, fname, dpi=None, sub_folder_name="", makedir=True, transparent=False):
     set_dir427(depth=2)  # set cwd to CCS427.py dir
     if sub_folder_name:  # empty string is falsy
         sub_folder_name = f"\\{sub_folder_name}"
@@ -38,12 +38,12 @@ def saveNclose427(fig, fname, dpi=None, sub_folder_name="", makedir=True):
         if makedir:
             mkdir_p(dir_lossless)
         # bbox_inches="tight": auto resize fig to fit titles and such
-        fig.savefig(dir_lossless + f"\\{fname}.pdf", bbox_inches="tight")
+        fig.savefig(dir_lossless + f"\\{fname}.pdf", bbox_inches="tight", transparent=transparent)
     # if dpi is provided, only save lossy version
     dir_dpi = f"output\\png_dpi{dpi}{sub_folder_name}"
     if makedir:
         mkdir_p(dir_dpi)
-    fig.savefig(dir_dpi + f"\\{fname}.png", bbox_inches="tight", dpi=dpi)
+    fig.savefig(dir_dpi + f"\\{fname}.png", bbox_inches="tight", dpi=dpi, transparent=transparent)
 
     fig.clf()  # clear figure
     plt.close(fig=fig)  # close figure
@@ -86,8 +86,9 @@ def cbrLabel427(cax, title):
     assume fig.colorbar(ticklocation='right') which should be default
     default fontsize plt.rcParams['font.size']=10.0
     my convention of fontsize: title 17, other titles 11.
-    Args:
-        cax: axis onto which colorbar is drawn
+    Args
+    ----
+    - cax: axis onto which colorbar is drawn
     """
     kwargs = {
         "transform": cax.transAxes,

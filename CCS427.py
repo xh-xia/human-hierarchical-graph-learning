@@ -64,9 +64,12 @@ def main_Sierpinski427():
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
     kw_loop.update(dict(raw_method=p["raw_method"], CCS_plot_type=p["CCS_plot_type"]))
 
+    # just graph
+    betas = [np.inf, 0.33, 0.70]
+    plot_Graph((3, 3, 3), betas, dpi=300, sub_folder_name="", transparent=True, annotate=None)
     # single-processing | w/o mp in plot_main() ~155 sec
-    for beta_class in p["beta_classes"]:
-        plot_main(**kw_loop, mp=False)(beta_class)
+    # for beta_class in p["beta_classes"]:
+    #     plot_main(**kw_loop, mp=False)(beta_class)
     # multi-threading | w/o mp in plot_main() ~?? sec (too slow)
     # with ThreadPoolExecutor() as executor:
     #     executor.map(plot_main(**kw_loop, mp=False), p["beta_classes"])
@@ -140,6 +143,7 @@ def plot_side(tup, beta_arr):
     dd[tup]["Sier"] = Sier
 
     return dd
+
 
 def make_A_hat_beta(A, beta):
     """generate A_hat according to Max Entropy Model
@@ -490,6 +494,50 @@ def plot_Graph_CCS(
         saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
 
 
+def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, annotate=None):
+    """
+    generates a graph for each beta in beta_arr
+
+    Kwargs
+    ------
+    - sub_folder_name (str):
+        the name of the folder in f"output/{whatnot}/" to store the plots
+        where <whatnot> is defined in saveNclose427()
+    - transparent (bool): whether we would use transparent background for output
+    """
+    if sub_folder_name == "":
+        sub_folder_name = "graphs_singletons"
+    regType, p, n = tup  # unpack tup
+    DD = plot_side(beta_arr=beta_arr)(tup)
+    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    height_ratios, width_ratios = [1, 4, 5], [17, 1]
+    kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
+    kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
+    gs = GridSpec(**kw1)
+
+    # calculate A_hat based on analytic prediction
+    eigvals, eigvecs = np.linalg.eigh(DD[tup]["GTDict"]["A"])
+    eigvals = np.diag(eigvals)  # convert eigval list into eigval matrix 𝚲
+    for b in beta_arr:
+        if np.isinf(b):  # inf is the same as ground truth
+            fname = f"SierpinskiGraph(beta=inf,regType={regType},p={p},n={n})"
+            A = DD[tup]["GTDict"]["A"]
+        else:
+            fname = f"SierpinskiGraph(beta={b:.3f},regType={regType},p={p},n={n})"
+            Lambda = (1 - np.exp(-b)) * eigvals / (1 - np.exp(-b) * eigvals)
+            A = eigvecs @ Lambda @ (eigvecs.T)  # this works if A is symmetric (regularized)
+
+        fig = plt.figure(figsize=[6, 4.5])  # initialize
+        ax = fig.add_subplot(gs[:, :])
+        axcb = fig.add_subplot(gs[1, -1])  # Edge Weight colorbar
+        # axt = fig.add_subplot(gs[0, :])  # title axis
+        kw3 = dict(ax=ax, axcb=axcb, axt=None, fig=fig, dpi=dpi, bA=[b, A])
+        kw3.update(dict(params=tup, colors=colors, annotate=annotate))
+        kw3.update(dict(nodeList=DD[tup]["Sier"].nodeList, GTDict=DD[tup]["GTDict"]))
+        ax_Graph(**kw3)
+        saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name, transparent=transparent)
+
+
 def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
            noise=None, spl=-1, varb=False, err_type='ste', CCS_type='mean', show_sim_param=False,
            is_log=True, colors=None, dpi=None, regCCS=None):
@@ -786,11 +834,13 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     return xmaxs
 
 
-def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, annotate=None):
+def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
+             axt=None, colors=None, dpi=None, annotate=None, bA=None):
     """
     Args
     ----
     - ax/axcb: axis object
+    - axt: title axis
     - params (tuple): (regType, p, n)
     - nodeList: [(i,x,y),...] (x,y) is coordinate
     - GTDict (dict): contains 'A', 'edgeList', 'lvList' (all GroundTruth)
@@ -798,6 +848,9 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
         None: we don't label the nodes
         -1: Decimal
         p (0<p<10): base-p expansion
+    - bA (list=[float, np.arr]):
+        -bA[0]: beta
+        -bA[1]: transition prob matrix to draw; if not None, draw a single graph of A
     """
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -827,64 +880,95 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict, colors=None, dpi=None, ann
     marker_style = dict(
         facecolor="#f48ea5", edgecolor="#7f7596", marker="o", alpha=1, s=scale
     )  # previous CSS colors: lightcoral, cornflowerblue
-    annokw = dict(horizontalalignment="center", verticalalignment="center", color="b", fontsize=10)
+    annokw = dict(horizontalalignment="center", verticalalignment="center", color="k", fontsize=10)
     if annotate is None:
         for i, x, y in nodeList:
             ax.scatter(x, y, zorder=2, **marker_style)
     else:
+        base_p = annotate if annotate > 0 else 10
         for i, x, y in nodeList:
             ax.scatter(x, y, zorder=2, **marker_style)
-            ax.annotate(str(p_ary(i, p=p, L=n)), xy=(x, y), xytext=(x, y), **annokw)
-    # draw edges & Edge Weight Coloring
-    """ this is for transition prob edge drawing, which is not used anymore
-    A = GTDict['A']
-    n_ = np.shape(A)[0]
-    RGBA = np.zeros((round(n_*(n_-1)/2),4))
-    RGBA[:,1] = 0.5 # for green (not sure if this is color 'g')
-    counter = 0
-    for i in range(0,n_):
-        for j in range(i+1,n_): # undirected (A is symmetric)
-            # 🔴 assuming nodeList[i][0] = i
-            x = [nodeList[i][1],nodeList[j][1]]
-            y = [nodeList[i][2],nodeList[j][2]]
-            RGBA[counter,3] = 1 if A[i,j]>0 else 0 # set alpha to 1 (opaque) if edge exists
-            ax.plot(x,y,color=RGBA[counter,:],zorder=1) # lower int means drawn on the canvas earlier
-            counter += 1
-    """
-
-    cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:nu], N=nu)
-    cbr = fig.colorbar(
-        plt.cm.ScalarMappable(norm=Normalize(vmin=0, vmax=nu - 1), cmap=cmap),
-        cax=axcb,
-        format="%.2f",
-    )
-    cbr.set_ticks([(nu - 1) * (2 * i + 1) / (2 * nu) for i in range(nu)])
-    cbr.set_ticklabels(np.arange(1, nu + 1))
-    cbrLabel427(axcb, "Edge Level")
-    for lv in all_levels:
-        b_ = [x == lv for x in GTDict["lvList"]]  # boolean mask
-        b_edgeList = [e for (e, v) in zip(GTDict["edgeList"], b_) if v]  # edges in level lv
-        xcoords, ycoords = np.zeros((2, len(b_edgeList))), np.zeros((2, len(b_edgeList)))
-        for i, (v_i, v_j) in enumerate(b_edgeList):
-            xcoords[:, i] = [nodeList[v_i][1], nodeList[v_j][1]]
-            ycoords[:, i] = [nodeList[v_i][2], nodeList[v_j][2]]
-        ax.plot(
-            xcoords, ycoords, color=cmap(lv - 1), zorder=1
-        )  # lower int means drawn on the canvas earlier
+            ax.annotate(str(p_ary(i, p=base_p, L=n)), xy=(x, y), xytext=(x, y), **annokw)
+    # draw edges
+    if bA is not None:  # a singleton graph with transition prob edge weight coloring
+        beta, A = bA
+        title += fr" ($\beta=+\infty$)" if np.isinf(beta) else fr" ($\beta={beta:.3f}$)"
+        n_ = np.shape(A)[0]  # number of nodes
+        RGBA = np.zeros((round(n_*(n_-1)/2), 4))
+        RGBA[:,1] = 0.5 # for green (not sure if this is color 'g')
+        max_prob = A.max()
+        counter = 0
+        for i in range(0,n_):
+            for j in range(i+1,n_): # undirected (A is symmetric)
+                # 🔴 assuming nodeList[i][0] = i
+                x = [nodeList[i][1],nodeList[j][1]]
+                y = [nodeList[i][2],nodeList[j][2]]
+                RGBA[counter, 3] = A[i, j] / max_prob  # set alpha to 1 (opaque) if max prob
+                ax.plot(x, y, color=RGBA[counter,:], zorder=1)
+                counter += 1
+        rgba, nu = [[0,0.5,0,0], [0,0.5,0,1]], 5
+        cmap = LinearSegmentedColormap.from_list("custom edge color", rgba, N=nu)
+        norm = Normalize(vmin=0, vmax=nu - 1)
+        kwargs_cax = dict(cax=axcb, drawedges=False)
+        cbr = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), **kwargs_cax)
+        cbr.set_ticks([(nu - 1) * (2 * i + 1) / (2 * nu) for i in range(nu)])
+        cbr.set_ticklabels([f"{x:.2f}" for x in np.linspace(0, max_prob, nu)])
+        # cbr.ax.tick_params(labelsize=9)  # no effect
+        cbrLabel427(axcb, "transition probability")
+    else:  # edge level coloring
+        cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:nu], N=nu)
+        norm = Normalize(vmin=0, vmax=nu - 1)
+        cbr = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), cax=axcb)
+        cbr.set_ticks([(nu - 1) * (2 * i + 1) / (2 * nu) for i in range(nu)])
+        cbr.set_ticklabels([f"{x:.2f}" for x in np.arange(1, nu + 1)])
+        cbrLabel427(axcb, "Edge Level")
+        for lv in all_levels:
+            b_ = [x == lv for x in GTDict["lvList"]]  # boolean mask
+            b_edgeList = [e for (e, v) in zip(GTDict["edgeList"], b_) if v]  # edges in level lv
+            xcoords, ycoords = np.zeros((2, len(b_edgeList))), np.zeros((2, len(b_edgeList)))
+            for i, (v_i, v_j) in enumerate(b_edgeList):
+                xcoords[:, i] = [nodeList[v_i][1], nodeList[v_j][1]]
+                ycoords[:, i] = [nodeList[v_i][2], nodeList[v_j][2]]
+            ax.plot(
+                xcoords, ycoords, color=cmap(lv - 1), zorder=1
+            )  # lower int -> drawn on the canvas earlier
     # Grid setting and save
     axcb.set_frame_on(False)
-    axcb.set_axis_off()  # same as ax.axis('off')
+    # axcb.set_axis_off()  # same as ax.axis('off')
     ax.set_frame_on(False)
     ax.set_axis_off()  # same as ax.axis('off')
     ax.axis("equal")  # so that regular polygons appear to be regular as well
-    if annotate is None:
-        ax.set_title(title, fontsize=17)
-    elif annotate == -1:
-        ax.set_title(title[20:-12] + "Decimal Representation)", fontsize=17)
-    else:  # since axET is always GroundTruthOnly, title will just be GroundTruth
-        ax.set_title(title[20:-12] + "Base {:d} Representation)".format(p), fontsize=17)
-    ax.grid(False)
-    # plt.legend(loc='upper left')
+    if axt is None:  # use ax.set_title()
+        if annotate is None:
+            ax.set_title(title, fontsize=17)
+        else:
+            if annotate == -1:
+                suffix = "Decimal)"
+            else:
+                suffix = f"Base-{base_p:d})"
+            if bA is None:
+                ax.set_title(title[20:-12] + suffix, fontsize=17)
+            else:
+                ax.set_title(title[:-1] + ", " + suffix, fontsize=17)
+        ax.grid(False)
+        # plt.legend(loc='upper left')
+    else:
+        axt.set_frame_on(False)
+        axt.set_axis_off()
+        kwargs_axt = dict(fontsize=17, transform=axt.transAxes)
+        if annotate is None:
+            axt.text(0, 0, title, **kwargs_axt)
+        else:
+            if annotate == -1:
+                suffix = "Decimal)"
+            else:
+                suffix = f"Base-{base_p:d})"
+            if bA is None:
+                axt.text(0, 0, title[20:-12] + suffix, **kwargs_axt)
+            else:
+                axt.text(0, 0, title[:-1] + ", " + suffix, **kwargs_axt)
+        ax.grid(False)
+        # plt.legend(loc='upper left')
 
 
 if __name__ == "__main__":
