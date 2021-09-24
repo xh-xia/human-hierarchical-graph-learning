@@ -122,6 +122,82 @@ def findNearest(arr, val, is_arg=True):
         return arr[ind]
 
 
+def func1d_bs427(arr_1d, funct_stat0, rng_idx, funct_stat1=None, repeat=False):
+    """actual bootstrap happens here
+    NOTE: len(arr_1d) == len(rng_idx[i]) for any i should be true
+
+    Args
+    ----
+    - arr_1d (nparr): has to be 1D
+    - funct_stat (function: 1D->scalar): np.nanmedian and the like; statistic used in bootstrapping
+    - rng_idx (list): list of np.arr which is indices for each bootstrap resample
+    - funct_stat1 (function: 1D->scalar): np.nanmedian and the like;
+        - statistic (funct_stat1) of statistic (funct_stat)
+        - if not None,
+            - val=funct_stat1(arr) will be repeated len(arr_1d) times if repeat==True
+            - otherwise val will be return (scalar)
+
+    Return
+    ------
+    (list): 1D, size=len(rng_idx) if stat or len(arr_1d) if stat2
+    """
+
+    arr = [None] * len(rng_idx)
+    for i in range(len(rng_idx)):
+        arr[i] = funct_stat0(arr_1d[rng_idx[i]])
+    if funct_stat1 is not None:
+        arr = [funct_stat1(arr)] * len(arr_1d) if repeat else funct_stat1(arr)
+
+    return arr
+
+
+def bootstrap427(nparr, axis, n_sample, statistic0, statistic1=None, repeat=False):
+    """bootstrap is same-size sample w replacement
+
+    Assume axes other than `axis` were independently sampled;
+    this way we only need to RNG `n_sample` times
+    e.g., nparr has 4 dims; boostrap axis=3; then nparr[s,l,b,:] is independent of
+        nparr[s+1,l,b,:], nparr[s,l+1,b,:], nparr[s,l,b+1,:]
+
+    Args
+    ----
+    - nparr (np.arr): data
+    - axis (int): axis to bootstrap
+    - n_sample (int): number of samples to bootstrap
+    - statistic0 (str): statistic to calculate per bootstrap resample; output should be a scalar
+    - statistic1 (None or str): statistic of statistic
+        - should be "std": bootstrap to get the "spread" of the statistic of interest
+
+    Return
+    ------
+    - (np.arr):
+        - case 1: statistic1 is None
+        same shape as nparr except arr[`axis`]=`n_sample` instead of nparr.shape[`axis`];
+        extry along axis=`axis` is statistic at each i in range(`n_sample`)
+        - case 2: statistic1 is not None
+        same shape as nparr;
+        entry along axis=`axis` is repeated value of the mean/std/etc of the statistic
+    """
+
+    n = nparr.shape[axis]  # number of sample in the data at given <axis>
+    rng_idx = [np.random.randint(n, size=n) for _ in range(n_sample)]  # initialize random index
+
+    kwargs = dict(rng_idx=rng_idx, repeat=repeat)
+    for i, func1d in enumerate([statistic0, statistic1]):
+        if i==1 and func1d is None:
+            kwargs[f"funct_stat{i}"] = None
+        elif func1d == "mean":
+            kwargs[f"funct_stat{i}"] = np.nanmean
+        elif func1d == "std":
+            kwargs[f"funct_stat{i}"] = np.nanstd
+        elif func1d == "median":
+            kwargs[f"funct_stat{i}"] = np.nanmedian
+        else:
+            raise NotImplementedError(f"<func1d>={func1d} is unimplemented")
+
+    return np.apply_along_axis(func1d_bs427, axis=axis, arr=nparr, **kwargs)
+
+
 # region: linear algebra
 
 """

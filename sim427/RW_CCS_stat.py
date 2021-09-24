@@ -14,13 +14,13 @@ from RW_Graph_Class import CCS
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 from utility427.helper427 import set_dir427, mkdir_p, get_params
-from utility427.math427 import np
+from utility427.math427 import np, bootstrap427
 from utility427.sim_params427 import make_sim_params
 
 
 """
 CCS_stat (dict): 3 keys each corresponding to one statistic of CCS:
-"mean", "std", "ste", the value (dict) of them is of the same structure:
+"mean", "std", etc., the value (dict) of them is of the same structure:
 value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     s stands for the s-th sample in counts tensor defined in RW_Graph_Class.py
     (2nd dim specifies type of value in the cell; 3rd dim corresponds to different beta)
@@ -35,8 +35,13 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
 """
 
 is_operation = True  # whether CCS_compute is done as @operation in signac
-sub_folder_name = "study_low_beta"  # folder inside output folder to store all "var_betas" CCS_stat
+sub_folder_name = "median_and_ste" # folder inside output folder to store all CCS_stat
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
+
+KEYS = ["mean", "ste", "median", "ste_median"]  # keys of CCS_stat
+if save_raw:
+    KEYS += ["raw"]
+
 
 def print_progress(counter, tot=28000):
     if counter % 1000 == 0:
@@ -58,9 +63,9 @@ def main_CCS_stat():
     else:
         CCS_type_slice = 1
     CCS_stat = dict()
-    CCS_stat["mean"], CCS_stat["std"], CCS_stat["ste"] = dict(), dict(), dict()
-    if save_raw:
-        CCS_stat["raw"] = dict()
+
+    for k in KEYS:
+        CCS_stat[k] = dict()
     project = sn.get_project()
     n_sample = int(np.floor(params["steps_tot"] / params["sample_period"]))
     for i in range(len(params["beta_classes"])):
@@ -96,12 +101,22 @@ def main_CCS_stat():
                     #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
             if save_raw:
                 CCS_stat["raw"][(regType, p, n)] = stat_arr
+
             nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
             CCS_stat["mean"][(regType, p, n)] = nparr.copy()
-            nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
-            CCS_stat["std"][(regType, p, n)] = nparr.copy()
             nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
             CCS_stat["ste"][(regType, p, n)] = nparr.copy()
+
+            nparr[:, 3:, :] = np.nanmedian(stat_arr, axis=3)
+            CCS_stat["median"][(regType, p, n)] = nparr.copy()
+            kwargs = dict(n_sample=params["n_agents"], statistic0="median", statistic1="std")
+            kwargs.update(dict(repeat=False))
+            nparr[:, 3:, :] = bootstrap427(stat_arr, axis=3, **kwargs)
+            CCS_stat["ste_median"][(regType, p, n)] = nparr.copy()
+            # median = np.nanmedian(stat_arr, axis=3)[..., np.newaxis]
+            # median = np.repeat(median, repeats=np.shape(stat_arr)[3], axis=3)
+            # nparr[:, 3:, :] = np.nanmedian(np.abs(stat_arr - median), axis=3)
+            # CCS_stat["mad"][(regType, p, n)] = nparr.copy()
 
         print(f"loop {i}: {params['beta_classes'][i]} has {counter} jobs")
         fname = set_dir427() + f"\\output\\{sub_folder_name}\\"

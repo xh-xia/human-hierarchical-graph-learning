@@ -64,12 +64,12 @@ def main_Sierpinski427():
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
     kw_loop.update(dict(raw_method=p["raw_method"], CCS_plot_type=p["CCS_plot_type"]))
 
-    # just graph
+    # just graph (graphs_singleton)
     betas = [np.inf, 0.33, 0.70]
     plot_Graph((3, 3, 3), betas, dpi=300, sub_folder_name="", transparent=True, annotate=None)
     # single-processing | w/o mp in plot_main() ~155 sec
-    # for beta_class in p["beta_classes"]:
-    #     plot_main(**kw_loop, mp=False)(beta_class)
+    for beta_class in p["beta_classes"]:
+        plot_main(**kw_loop, mp=False)(beta_class)
     # multi-threading | w/o mp in plot_main() ~?? sec (too slow)
     # with ThreadPoolExecutor() as executor:
     #     executor.map(plot_main(**kw_loop, mp=False), p["beta_classes"])
@@ -91,7 +91,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
     """
     npy_sub_path = f"{sub_fo_name}\\"
     npy_sub_path += f"CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
-    CCS_stat = load_CCS_stat(fname=npy_sub_path)  # load sim results
+    CCS_stat = load_CCS_stat(fname=npy_sub_path)  # load sim results (<noise>)
     for key in hierDict.keys():
         kw_main = dict(beta_arr=beta_arr)
         if mp:
@@ -567,8 +567,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             f = A + B
             then s = sqrt(sA^2 + sB^2)
     - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
-        - violin: vanilla violin plot
-        - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
+        - violin: vanilla violin plot; show mean and SD
+        - violin_median: show median and ste_median instead
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
     - spl (int): what index of sample to draw data from CCS_stat; -1 means the last sample
@@ -635,7 +635,10 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         beta_type = "both" if varb else "constant"
         ax.text(0.5, topy, f"n_agents={n_agents:.0f}", **styles_txt)
         ax.text(0.5, topy - 1 * s, f"walk_length={n_steps:.0f}", **styles_txt)
-        ax.text(0.5, topy - 2 * s, f"errorbar={err_type}", **styles_txt)
+        if raw_method[-6:] == "median":  # show errorbar type to be ste_median
+            ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
+        else: # identical: standard error (which is std of the statistic)
+            ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
         ax.text(0.5, topy - 3 * s, f"CCS_type={CCS_type}", **styles_txt)
         ax.text(0.5, topy - 4 * s, f"beta_type={beta_type}", **styles_txt)
 
@@ -677,19 +680,14 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
             kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
             kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
-            ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
             if raw_method is None:
                 return 0
             elif raw_method.startswith("violin"):  # violin plot (overlaid)
                 # TODO haven't implemented it in temp_a2()
-                if raw_method[-6:] == "median" and i == 0:
-                    return 0  # skip if i==0 (i.e., CCS level is 1 (finest level))
                 data_vl = [noise["raw"][params][spl, i, b, :] for b in range(bs2.start, bs2.stop)]
                 pos_vl = noise["mean"][params][spl, 0, bs2]  # beta
                 pos_vl, widths = get_violin_pw(pos_vl, x_scale=x_scale)
                 kw_vl = dict(showmeans=False, showmedians=False, showextrema=False, widths=widths)
-                if raw_method[-6:] == "median":
-                    kw_vl["showmedians"] = True
                 if is_log:  # create a dummy axis and plot violins on that axis
                     ax_vl = ax.twiny()  # instantiate a separate x-axis for equal spacing violins
                     parts = ax_vl.violinplot(data_vl, positions=pos_vl, **kw_vl)
@@ -702,14 +700,15 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
                 for pc in parts['bodies']:
                     pc.set_facecolor(cmap(i))
                     pc.set_alpha(0.27)
-                if raw_method[-6:] == "median":
-                    # red; 4th color in plt.rcParams["axes.prop_cycle"].by_key()["color"]
-                    parts["cmedians"].set_color("#d62728")
-                    parts["cmedians"].set_alpha(1)  # opaque
-                    return Line2D([0, 1], [0, 1], color=parts["cmedians"].get_color()[0])
+                if raw_method[-6:] == "median":  # plot median and ste_median instead
+                    kw_erb.update(dict(y=noise["median"][params][spl, 3 + i, bs2]))
+                    kw_erb.update(dict(yerr=noise["ste_median"][params][spl, 3 + i, bs2]))
+
             else:
                 msg2 = "<raw_method>: currently only supports scatter(None)/violin('violin') plot"
                 raise ValueError(msg2)
+
+            ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
     
     def temp_a2():  # draw total CCS: analytical, noise constant, noise dynamic
         sty1.update(dict(label="Total CCS", color=cmap(0)))
@@ -776,9 +775,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     if CCS_plot_type == "CCS":  # plot vanilla CCS graph
         xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
         for i in range(n_level):  # n_level is always n-1; see earlier code for why this is true
-            temp_line_ = temp_a1(i)
-            if isinstance(temp_line_, Line2D):
-                temp_line = temp_line_
+            temp_a1(i)
             temp_b1(i)  # put peak val on plot
 
         if key in ["n", "reg_n"]:
@@ -826,10 +823,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     else:
         loc="center right"
     temp_li, temp_la = ax.get_legend_handles_labels()
-    if isinstance(temp_line, Line2D):
-        ax.legend([temp_line] + temp_li, ["median"] + temp_la, loc=loc)
-    else:
-        ax.legend(temp_li, temp_la, loc=loc)
+    ax.legend(temp_li, temp_la, loc=loc)
     ax.grid(False)
     return xmaxs
 
