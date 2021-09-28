@@ -154,15 +154,24 @@ def get_violin_pw(x, x_scale=None):
 """
 
 
-def load_CCS_stat(fname="CCS_stat"):
-    set_dir427(depth=2)  # set cwd to CCS427.py dir
-    fname = f"input\\{fname}.npy"
-    try:
-        return np.load(fname, allow_pickle=True).tolist()
-    except OSError:  # couldn't find the file
-        raise OSError('make sure .npy (stochastic sim results) is in "input" folder')
-    except Exception:
-        raise
+def load_CCS_stat(sim_path=None, fname="CCS_stat"):
+
+    if sim_path is not None:
+        try:
+            return np.load(f"{sim_path}\\{fname}.npy", allow_pickle=True).tolist()
+        except OSError:  # couldn't find the file
+            raise OSError(f'make sure {sim_path}\\{fname} exists')
+        except Exception:
+            raise
+    else:
+        set_dir427(depth=2)  # set cwd to CCS427.py dir
+        fname = f"input\\{fname}.npy"
+        try:
+            return np.load(fname, allow_pickle=True).tolist()
+        except OSError:  # couldn't find the file
+            raise OSError('make sure .npy (stochastic sim results) is in "input" folder')
+        except Exception:
+            raise
 
 
 def make_level_masks(GTDict):
