@@ -1,7 +1,7 @@
 """
-CCS visualizations.
+CCS, CCPS, CCTS
 
-Created: Monday, ‎April ‎5, ‎2021, ‏‎3:59:47 PM (EDT; maybe earlier actually)
+Created: Tuesday, ‎October ‎26, ‎2021, ‏‎9:50:35 AM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -16,9 +16,9 @@ from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_v
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params
+from sim427.RW_Graph_Class import CCS, CCPS, make_masks
 
-
-def main_Sierpinski427():
+def CCS_main():
     """
     get parameters from params_CCS427.json:
     - err_type (str): "std" or "ste", type of spread of CCS
@@ -36,17 +36,11 @@ def main_Sierpinski427():
     - n_agents (int): num of agents per subject parameter (like a repetition experiment)
     - var_betas: should be effectively the same as that in sim427/input/params.json
 
-
     - hierDict (dict): to recreate the graph parameters set (i.e., (regType, p, n))
     """
     set_dir427()  # script dir
     # get /sim427/input parameters (2 .json files)
     p = get_params(fname="sim427\\input\\params", default_dir=False)
-    # overwrite key_class
-    # can be whatever as long as it (was once defined in params.json) was run in sim427
-    # otherwise will be error in load_CCS_stat(), which loads results generated from sim427
-    # p["key_class"] = "max_beta"
-    # p["key_class"] = "max_beta_hi2lo"
     make_sim_params(p)
     p.update(get_params(fname="input\\params_CCS427", default_dir=False))  # get parameters for CCS427.py
 
@@ -54,71 +48,46 @@ def main_Sierpinski427():
     p["colors"] = colors_selector(str="5-class Greens")
     p["beta_arr"] = np.geomspace(0.0001, 10, 400)  # for analytical curve only
     hierDict = dict()
-    # hierDict['n'] = [[0],[3],[3,4,5]]
-    # hierDict['p'] = [[3],[3,4,5],[3]]
-    # hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
-    # hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
     hierDict['r'] = [[0,1,3],[3],[3]]
     kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
     kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
     kw_loop.update(dict(raw_method=p["raw_method"], CCS_plot_type=p["CCS_plot_type"]))
 
-    # just graph (graphs_singleton)
-    betas = [np.inf, 0.33, 0.70]
-    plot_Graph((3, 3, 3), betas, dpi=300, sub_folder_name="", transparent=True, annotate=None)
-    # single-processing | w/o mp in plot_main() ~155 sec
     for beta_class in p["beta_classes"]:
-        plot_main(**kw_loop, mp=False)(beta_class)
-    # multi-threading | w/o mp in plot_main() ~?? sec (too slow)
-    # with ThreadPoolExecutor() as executor:
-    #     executor.map(plot_main(**kw_loop, mp=False), p["beta_classes"])
+        plot_main(**kw_loop)(beta_class)
 
 
 @partial_427_decorator
 def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
-              beta_arr, err_type, raw_method, CCS_plot_type, colors, dpi, mp=False):
+              beta_arr, err_type, raw_method, CCS_plot_type, colors, dpi):
     """this function is I/O bound | suitable for multi-threading
     should be in script dir when this function is run
-
-    Kwarg
-    -----
-    mp (bool): whether to use multi-processing on plot_side() | doesn't work, so use False for now
 
     Intermediary
     ------------
     DD (dict): a data dict created only to be used in graphing (i.e., plot_Graph_CCS())
         most results from numerical calculations are put in DD
     """
-    npy_sub_path = f"{sub_fo_name}\\CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
-    CCS_stat = load_CCS_stat(sim_path="sim427\\output", fname=npy_sub_path)  # load sim results (<noise>)
+
+    CCS_stats = [None] * 3
+    for i, CCS_variant in enumerate(["CCS", "CCPS", "CCPS2"]):
+        npy_sub_path = f"{sub_fo_name}\\{CCS_variant}_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
+        CCS_stats[i] = load_CCS_stat(sim_path="sim427\\output", fname=npy_sub_path)  # load sim results (<noise>)
 
     for key in hierDict.keys():
         kw_main = dict(beta_arr=beta_arr)
-        if mp:
-            with ProcessPoolExecutor() as executor:
-                dd_list = executor.map(plot_side(**kw_main), product(*hierDict[key]))
-        else:
-            dd_list = map(plot_side(**kw_main), product(*hierDict[key]))
+        dd_list = map(plot_side(**kw_main), product(*hierDict[key]))
         DD = dict()
         for dd in dd_list:  # aggregate all keys of dd in dd_list into DD
             DD.update(dd)
 
-        kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
-        regCCS = 1 if len(key) > 1 else 2  # always do 2 CCS rows if len(key) == 1
-        kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=regCCS))
+        kw_plot = dict(CCS_stats=CCS_stats, err_type=err_type, CCS_type=CCS_type)
+        kw_plot.update(dict(colors=colors, dpi=dpi))
         kw_plot.update(dict(CCS_plot_type=CCS_plot_type, sub_folder_name=sub_fo_name))
         kw_plot.update(dict(raw_method=raw_method))
 
-        if regCCS in [0, 1]:
-            n_sample = CCS_stat["mean"][list(DD.keys())[0]].shape[0]
-            for spl in range(n_sample):
-                kw_plot.update(dict(spl=spl))
-                plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
-        elif regCCS == 2:  # no need for spl since it will be forced to be [0, -1]
-            plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
-        else:
-            raise NotImplementedError(f"<regCCS>={regCCS} is not implemented")
+        plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
 
 
 @partial_427_decorator
@@ -139,12 +108,8 @@ def plot_side(tup, beta_arr):
     dd[tup] = dict()
     dd[tup]["GTDict"] = make_SierpinskiGraph427(p, lv, norm=True, regType=regType)
     save_masks(dd[tup]["GTDict"], regType, p, lv)
-    dd[tup]["A_hat_list"] = [
-        make_A_hat_beta(dd[tup]["GTDict"]["A"], beta) for beta in beta_arr
-    ]
-    dd[tup]["CCS_arr"] = CCS_analysis(
-        dd[tup]["GTDict"], beta_arr, dd[tup]["A_hat_list"], analytic=False
-    )
+    dd[tup]["A_hat_list"] = [make_A_hat_beta(dd[tup]["GTDict"]["A"], beta) for beta in beta_arr]
+    dd[tup]["CCS_arrs"] = CCS_analysis_v2(tup, dd[tup]["A_hat_list"])
     Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
     Sier.Layout_Sierpinski427()
     dd[tup]["Sier"] = Sier
@@ -177,181 +142,55 @@ def make_A_hat_beta(A, beta):
     return (1 - np.exp(-beta)) * A_ @ np.linalg.inv(np.eye(n) - np.exp(-beta) * A_)
 
 
-def get_S_kl(n, A, beta_arr, edgeList, lvList, pList=None, nList=None):
+def CCS_analysis_v2(tup, A_hat_list=None):
     """
+    it finds CCS, CCPS, CCTS given A_hat_list (len(A_hat_list)=num of betas)
 
-    Args
-    ----
-    - n: power, whereas p is base
-    - A: GroundTruth Transition Prob matrix.
-    - beta_arr: list of β
-    - pList: list of p in L_p(l)
-    - nList: list of n in I_n(l)
-
-    Intermediary
-    ------------
-    get L_pl ≡ L_p(l) = sum over all eigenvalues: (λ/(1-λ))**p * S_kl
-    where (λ_k/(1-λ_k))**p = pk[p,k]
-    where we also need to compute S_kl first:
-    "structure factor":
-    S_kl: S_kl[k,l] = mean_ij(v[i]*v[j]) for k-th eigvec v; v[i],v[j] ∈ level-(l+1) community (edge is level-(l+1) only)
-    with corresponding eigvals
-    eigval_kβ: eigval_kβ[k,β] = λ_A_hat[k]
-               eigval_kβ[k,-1] = λ_A[k]
-    "finite-step surprisal":
-    ΔI_n(l1,l2) = sum_k (λ_k^n*(S_kl1-S_kl2))
-    I_n(l) = sum_k (λ_k^n*S_kl)
-    """
-    if pList is None:
-        pList = [1, 2, 3, 4]
-    if nList is None:
-        nList = np.arange(2, 47)
-    res = dict()  # results of the calculations
-
-    res["eigvals"], res["eigvecs"], res["eigvals_rank"] = rank_eigvals(A)  # GroundTruth
-    res["num_eigval"] = max(res["eigvals_rank"]) + 1  # num of unique eigvals
-    res["S_kl"] = np.zeros((res["num_eigval"], max(lvList)))
-    res["pk"] = np.zeros(
-        (len(pList), res["num_eigval"])
-    )  # largest eigval will not be calculated, thus always zeroes in here
-    res["nk"] = np.zeros((len(nList), res["num_eigval"]))  # ditto
-    res["eigval_kβ"] = np.zeros((res["num_eigval"], len(beta_arr) + 1))
-    # res['L_pl'] = np.zeros((len(pList), max(lvList)))
-    # res['I_nl'] = np.zeros((len(nList), max(lvList)))
-    # res['ΔI_n'] = np.zeros((len(nList), max(lvList)-1))
-
-    """
-    S_kl calculation (no β involved) & eigval_kβ calculation (no group assignment involved)
-    note: (algebraic=geometric in our case) multiplicity should be the same for any β
-    """
-    for eig_k in range(res["num_eigval"]):
-        idx = res["eigvals_rank"].index(eig_k)  # first one that matches
-        res["eigval_kβ"][eig_k, -1] = res["eigvals"][idx]
-        res["eigval_kβ"][eig_k, :-1] = (
-            (1 - np.exp(-beta_arr))
-            * res["eigvals"][idx]
-            / (1 - (np.exp(-beta_arr)) * res["eigvals"][idx])
-        )
-        if eig_k >= 1:  # excluding largest eigval (i.e., eig_k = 0)
-            for i in range(len(pList)):
-                res["pk"][i, eig_k] = (res["eigvals"][idx] / (1 - res["eigvals"][idx])) ** pList[i]
-            for i in range(len(nList)):
-                res["nk"][i, eig_k] = (res["eigvals"][idx]) ** nList[i]
-        kth_eigvec = res["eigvecs"][:, idx]  # nparr
-        for l in range(1, max(lvList) + 1):
-            b_ = [x == l for x in lvList]  # boolean mask
-            b_edgeList = [e for (e, v) in zip(edgeList, b_) if v]  # edges in level l
-            res["S_kl"][eig_k, l - 1] = np.mean(
-                [kth_eigvec[v_i] * kth_eigvec[v_j] for (v_i, v_j) in b_edgeList]
-            )
-    res["L_pl"] = res["pk"] @ res["S_kl"]
-    res["I_nl"] = res["nk"] @ res["S_kl"]
-    res["ΔI_n"] = np.diff(res["I_nl"][:, ::-1], axis=1)[:, ::-1]
-    return res
-
-
-def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
-    """
-    This function finds simulated (or analytic) CCS for all beta in beta_arr.
-
-    Args
-    ----
-    - GroundTruthOnly (bool): not implemented ∵ those zero in original don't have well-defined hierarchies
-        True: only calculate mean over the edges that are non-zero in original Sierpiński
-        False: calculate mean over all appropriate edges
-    - analytic (bool): if True, find analytic CCS
-        not implemented if there is dynamic beta (i.e., beta_arr contains negative beta)
+    Arg
+    ---
+    - tup (tuple): regType, p, n
     - A_hat_list (np.arr):
-        None: analytical prediction from Eigen-decomposition (uses beta_arr)
-        np.arr: simulated result (vanilla method; doesn't use beta_arr)
+        np.arr: analytic computation to find A_hat (transition probability matrix)
 
     Return
     ------
-    - CCS_arr (3D nparr):
-        since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
-        NOTE: means, or stds, is part of CCS definition:
-            we can find certain 1-val statistic (mean, std, etc) for a given level,
-            and then we subtract or divide (MentalErrors paper used divide)
-            and "CCS for level l" is a function of that statistic of level l and l+1
-        CCS_arr[s,0,l-1]: CCS of means at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
-        CCS_arr[s,1,l-1]: CCS of stds at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
-
-    Miscellany
-    ----------
-    Copy Paste from make_SierpinskiGraph427() documentation:
-    edgeList (a list of size-2 tuples (v_i,v_j))
-        node index in edgeList is simply p2ten(s, p=p)
-        where s is nodel p-ary string label
-    lvList (a list of hierarchy labels): finest level is 1
+    - CCS_arrs (dict of 3D nparr): each key (str) is a variant of CCS
+        for CCS_arr in CCS_arrs:
+            CCS_arr[s,0,l-1]: CCS of means at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
+            CCS_arr[s,1,l-1]: CCS of stds at beta s for level l (f"{'lv'}{l}{'-'}{l+1}")
     """
-    edgeList, lvList = GTDict["edgeList"], GTDict["lvList"]
-    n = len(beta_arr)  # number of beta (which is also number of graphs)
-    lv = max(lvList)  # (max) hierarchical level (also the coarsest level)
-    CCS_arr = np.zeros(
-        (n, 2, lv - 1)
-    )  # since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
+    regType, p, n = tup
+    num_beta = len(A_hat_list)  # number of beta (which is also number of graphs)
+    if regType in [0, 3]:
+        lv = n  # (max) hierarchical level (also the coarsest level) for node community
+    elif regType in [1]:
+        lv = n + 1
+    else:
+        raise NotImplementedError(f"regType={regType} is not implemented yet")
+    CCS_arrs = dict()
+    CCS_arrs["CCS"] = np.zeros((num_beta, 2, lv - 1))
+    CCS_arrs["CCPS"] = np.zeros((num_beta, 2, lv - 1))
+    CCS_arrs["CCTS"] = np.zeros((num_beta, 2, lv - 1))
 
-    if A_hat_list is None:  # mental matrix is not supplied, we have to go analytic
-        analytic = True
-    if analytic:  # if analytic, we can't have dynamic beta (i.e., negative entries in beta_arr)
-        for i in range(-1, -n - 1, -1):
-            if beta_arr[i] < 0:
-                raise NotImplementedError("analytic CCS not implemented for dynamic beta")
+    for i in range(num_beta):
+        temp0 = CCS(A_hat_list[i], regType, p, n, seed=0, analytic_comp=True)
+        temp1 = CCPS(A_hat_list[i], regType, p, n, ccps_type=1, analytic_comp=True, scale=1)
+        temp2 = CCPS(A_hat_list[i], regType, p, n, ccps_type=2, analytic_comp=True, scale=1)
+        
+        CCS_arrs["CCS"][i, ...] = temp0[0, ...]
+        CCS_arrs["CCPS"][i, ...] = temp1[0, ...]
+        CCS_arrs["CCTS"][i, ...] = temp2[0, ...]
 
-    if not analytic:  # simulated CCS
-        for i in range(n):
-            mean_weights = [0.0 for _ in range(lv)]
-            std_weights = [0.0 for _ in range(lv)]
-            for l in range(1, lv + 1):
-                b_ = [x == l for x in lvList]  # boolean mask
-                b_edgeList = [e for (e, v) in zip(edgeList, b_) if v]  # edges in level l
-                temp_list = [A_hat_list[i][v_i, v_j] for (v_i, v_j) in b_edgeList]
-                mean_weights[l - 1] = np.mean(temp_list)
-                std_weights[l - 1] = np.std(temp_list)
-            # temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
-            # temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-            # if i == findNearest(beta_arr, 0.3, is_arg = True):
-            #     print("DEBUG [analytical] mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
-            temp1 = np.divide(mean_weights[:-1], mean_weights[1:])  # ditto, but more explicit
-            temp2 = np.divide(std_weights[:-1], std_weights[1:])  # ditto, but more explicit
-            for l in range(0, lv - 1):  # l is index, corresponding CCS lv is l+1
-                CCS_arr[i, 0, l] = temp1[l]
-                CCS_arr[i, 1, l] = temp2[l]
-    else:  # analytic CCS
-        eigvals, eigvecs = np.linalg.eigh(GTDict["A"])
-        eigvals = np.diag(eigvals)  # convert eigval list into eigval matrix 𝚲
-        for i in range(n):
-            mean_weights = [0.0 for _ in range(lv)]
-            std_weights = [0.0 for _ in range(lv)]
-            EB = np.exp(
-                -beta_arr[i]
-            )  # coefficient (e^-β) to find the eigenvalue of learned matrix A_hat
-            Lambda = (1 - EB) * eigvals / (1 - EB * eigvals)
-            A_hat = eigvecs @ Lambda @ (eigvecs.T)  # this works if A is symmetric (regularized)
-            # for some reason it is all nan when p=3, lv=4
-            # A_hat = eigvecs @ Lambda @ (np.linalg.inv(eigvecs))
-            for l in range(1, lv + 1):
-                b_ = [x == l for x in lvList]  # boolean mask
-                b_edgeList = [e for (e, v) in zip(edgeList, b_) if v]  # edges in level l
-                temp_list = [A_hat[v_i, v_j] for (v_i, v_j) in b_edgeList]
-                mean_weights[l - 1] = np.mean(temp_list)
-                std_weights[l - 1] = np.std(temp_list)
-            # temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
-            # temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
-            temp1 = np.divide(mean_weights[:-1], mean_weights[1:])  # ditto, but more explicit
-            temp2 = np.divide(std_weights[:-1], std_weights[1:])  # ditto, but more explicit
-            for l in range(0, lv - 1):
-                CCS_arr[i, 0, l] = temp1[l]
-                CCS_arr[i, 1, l] = temp2[l]
-
-    return CCS_arr
+    return CCS_arrs
 
 
 def plot_Graph_CCS(
-    DD, beta_arr, key, CCS_stat=None, raw_method=None, spl=-1, CCS_type="mean", err_type="ste",
-    CCS_plot_type="CCS", colors=None, dpi=None, regCCS=0, sub_folder_name=""
+    DD, beta_arr, key, CCS_stats=None, raw_method=None, CCS_type="mean", err_type="ste",
+    CCS_plot_type="CCS", colors=None, dpi=None, sub_folder_name=""
 ):
     """It produces both CCS plot and Graph (node-edge graph, not graph graph) plot
+
+    display 3 rows: 1 graph 1 CCPS 1 CCTS
 
     Args
     ----
@@ -361,8 +200,10 @@ def plot_Graph_CCS(
 
     Kwargs
     ------
-    - CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
-        same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
+    - CCS_stats (list dict): CCS, CCPS, CCTS (i.e., CCPS2)
+        each dict:
+            CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
+            same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
     - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
         - violin: vanilla violin plot
         - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
@@ -375,13 +216,6 @@ def plot_Graph_CCS(
     - colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
-    - regCCS (int):
-        1: display 4 rows of CCS with no graphs
-        assume:
-            hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
-            or
-            hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
-        2: display 3 rows: 1 graph 2 CCS; no varb implemented for this yet; spl is forced to be list
     - sub_folder_name (str):
         the name of the folder in f"output/{whatnot}/" to store the plots
         where <whatnot> is defined in saveNclose427()
@@ -390,199 +224,84 @@ def plot_Graph_CCS(
     ----
     CCS plot:
     - fixed beta
-    - variable beta (controlled by varb ≡ var_beta)
-        current implementation is a bit awkward & verbose (spamming if varb: everywhere lol)
-        only affects ax_CCS since Graph has nothing to do with beta in current ver.
+    - variable beta (controlled by varb ≡ var_beta): not implemented
     """
-    varb = False
     DD_keys = sorted(DD.keys(), reverse=False)  # ascending (default)
-    if regCCS==2:  # force spl to be a len-2 list [0, -1]
-        spl = [0, -1]
-    if CCS_stat is not None and regCCS!=2:
-        # generate variable beta version if there is negative beta (just need to check last item)
-        if CCS_stat["mean"][DD_keys[0]][spl, 0, -1] < 0:  # 2nd dim idx=0 is beta dim
-            varb = True
+    spl = [0, -1]
 
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    if regCCS==1:
-        fig = plt.figure(figsize=[20, 18])  # initialize
-        if varb:
-            fig2 = plt.figure(figsize=[20, 18])  # initialize
-    elif regCCS==2:
-        fig = plt.figure(figsize=[20, 13.5])  # initialize
-    else:
-        fig = plt.figure(figsize=[20, 9])  # initialize
-        if varb:
-            fig2 = plt.figure(figsize=[20, 9])  # initialize
+    fig = plt.figure(figsize=[20, 13.5])  # initialize
 
     ds = 0.2  # dummy axes for spacing between the visible plots
     cbW = 1  # colorbar width
     hf = 9  # relative height of (sub)figure
     width_ratios = [ds, 19, cbW] * 3  # ≡ [ds,19,cbW,ds,19,cbW,ds,19,cbW]
-    if regCCS==0:  # 2 rows
-        height_ratios = [1, hf, ds, 1] * 1 + [1, hf, ds]
-    elif regCCS==1:  # 4 rows
-        height_ratios = [1, hf, ds, 1] * 3 + [1, hf, ds]
-    elif regCCS==2:  # 3 rows
-        height_ratios = [1, hf, ds, 1] * 2 + [1, hf, ds]
+    height_ratios = [1, hf, ds, 1] * 2 + [1, hf, ds]  # 3 rows
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
     kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
     gs = GridSpec(**kw1)
 
     axes = dict()
-    if varb:
-        axes2 = dict()
-    if regCCS==0:
-        axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 3, [None] * 3
-        if varb:
-            axes2["Graph"], axes2["CCS"], axes2["Colorbar"] = [None] * 3, [None] * 3, [None] * 3
-    elif regCCS==1:
-        for regType in [0, 1, 2, 3]:
-            axes[f"CCS_reg{regType}"] = [None] * 3
-            if varb:
-                axes2[f"CCS_reg{regType}"] = [None] * 3
-    elif regCCS==2:
-        axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 6, [None] * 3
+    axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 6, [None] * 3
 
     fname = f"CCS_{key}"
-    if CCS_stat is not None:
-        # both group size and walk length are the same across all beta
-        if regCCS!=2:
-            n_agents = round(CCS_stat["mean"][DD_keys[0]][spl, 1, 0])
-            n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
-            fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
-        else:
-            n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
-            n_steps1 = round(CCS_stat["mean"][DD_keys[0]][spl[0], 2, 0])
-            n_steps2 = round(CCS_stat["mean"][DD_keys[0]][spl[1], 2, 0])
-            n_steps = (n_steps1, n_steps2)
-            fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
+    if len(CCS_stats) != 3:
+        raise ValueError("CCS_stats has to be a list of CCS_stat, CCPS_stat, CCTS_stat")
+    CCS_stat, CCPS_stat, CCTS_stat = CCS_stats
+    # both group size and walk length are the same across all beta
+    n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
+    n_steps1 = round(CCS_stat["mean"][DD_keys[0]][spl[0], 2, 0])
+    n_steps2 = round(CCS_stat["mean"][DD_keys[0]][spl[1], 2, 0])
+    n_steps = (n_steps1, n_steps2)
+    fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
 
-    if regCCS==1:  # assuming DD_keys has 12 entries
-        for i in range(3):
-            for regType in [0, 1, 2, 3]:
-                temp = gs[regType * 4 : regType * 4 + 3, i * 3 + 1]
-                axes[f"CCS_reg{regType}"][i] = fig.add_subplot(temp)
-                if varb:
-                    axes2[f"CCS_reg{regType}"][i] = fig2.add_subplot(temp)
-                params = DD_keys[i + 3 * regType]
-
-                kw2 = dict(ax=axes[f"CCS_reg{regType}"][i], x=beta_arr)
-                kw2.update(dict(CCS_plot_type=CCS_plot_type))
-                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
-                kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
-                kw2.update(dict(spl=spl, is_log=True, colors=colors, last_row=regType==3))
-                kw2.update(dict(raw_method=raw_method))
-                ax_CCS(**kw2)
-                if varb:
-                    kw2.update(dict(ax=axes2[f"CCS_reg{regType}"][i], varb=varb))
-                    ax_CCS(**kw2)
-    elif regCCS in [0, 2]:
-        lr = (regCCS==0)  # True if regCCS is 0, meaning first CCS row is the last row
-        spl_current = spl if regCCS==0 else spl[0]
-        for i in range(3):
-            axes["Graph"][i] = fig.add_subplot(gs[0:3, i * 3 + 1])
-            axes["CCS"][i] = fig.add_subplot(gs[4:7, i * 3 + 1])
-            axes["Colorbar"][i] = fig.add_subplot(gs[0:3, i * 3 + 2])  # Edge Type colorbar
-            params = DD_keys[i]
-            kw3 = dict(ax=axes["Graph"][i], axcb=axes["Colorbar"][i], fig=fig, dpi=dpi)
-            kw3.update(dict(params=params, colors=colors))
-            kw3.update(dict(nodeList=DD[params]["Sier"].nodeList, GTDict=DD[params]["GTDict"]))
-            ax_Graph(**kw3)
-            kw4 = dict(ax=axes["CCS"][i], x=beta_arr, CCS_arr=DD[params]["CCS_arr"], params=params)
-            kw4.update(dict(spl=spl_current, CCS_plot_type=CCS_plot_type))
-            kw4.update(dict(key=key, noise=CCS_stat, err_type=err_type, CCS_type=CCS_type))
-            kw4.update(dict(show_legend=i == 1, is_log=True, colors=colors, dpi=dpi, last_row=lr))
-            kw4.update(dict(raw_method=raw_method))
-            ax_CCS(**kw4)
-            if varb:
-                axes2["Graph"][i] = fig2.add_subplot(gs[0:3, i * 3 + 1])
-                axes2["CCS"][i] = fig2.add_subplot(gs[4:7, i * 3 + 1])
-                axes2["Colorbar"][i] = fig2.add_subplot(gs[0:3, i * 3 + 2])  # Edge Type colorbar
-                kw3.update(dict(ax=axes2["Graph"][i], axcb=axes2["Colorbar"][i], fig=fig2))
-                ax_Graph(**kw3)
-                kw4.update(dict(ax=axes2["CCS"][i], varb=varb))
-                ax_CCS(**kw4)
-        if regCCS==2:  # two CCS rows: one with walk_length=1500, one with walk_length=7500
-            spl_current = spl[1]  # 2nd CCS row; 1st was done above
-            for i in range(3):
-                axes["CCS"][i+3] = fig.add_subplot(gs[8:11, i * 3 + 1])
-                params = DD_keys[i]
-                kw4.update(dict(ax=axes["CCS"][i+3]))
-                kw4.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params))
-                kw4.update(dict(spl=spl_current, show_legend=i == 1, last_row=True))
-                ax_CCS(**kw4)
-    # panel label list
-    if regCCS == 0:
-        text_labels = ["A", "B"]
-    elif regCCS == 1:
-        text_labels = ["A", "B", "C", "D"]
-    elif regCCS == 2:
-        text_labels = ["A", "B", "C"]
-    else:
-        raise NotImplementedError(f"<regCCS>={regCCS} is not implemented")
+    # draw 1 transition graph + 2 CCS rows: CCPS, CCTS, all with walk_length=1500 or 7500
+    spl_current = spl[0]  # 0 is 1500, 1 is 7500
+    betas = [0.01, 0.1, 1]
+    A_333 = make_SierpinskiGraph427(3, 3, norm=True, regType=3, use_set=False)["A"]
+    for i in range(3):
+        axes["Graph"][i] = fig.add_subplot(gs[0:3, i * 3 + 1])
+        axes["CCS"][i] = fig.add_subplot(gs[4:7, i * 3 + 1])
+        axes["Colorbar"][i] = fig.add_subplot(gs[0:3, i * 3 + 2])  # Edge Type colorbar
+        # transition graph (all of the same param, but different beta)
+        bA = [betas[i], make_A_hat_beta(A_333, betas[i])]
+        params = DD_keys[2]  # regType=3, p=3, n=3
+        kw3 = dict(ax=axes["Graph"][i], axcb=axes["Colorbar"][i], fig=fig, dpi=dpi)
+        kw3.update(dict(params=params, colors=colors, bA=bA, col=i))
+        kw3.update(dict(nodeList=DD[params]["Sier"].nodeList, GTDict=DD[params]["GTDict"]))
+        ax_Graph(**kw3)
+        params = DD_keys[i]
+        # 1st CCS row: CCPS
+        kw4 = dict(ax=axes["CCS"][i], x=beta_arr, CCS_arrs=DD[params]["CCS_arrs"], params=params)
+        kw4.update(dict(spl=spl_current, CCS_plot_type=CCS_plot_type))
+        kw4.update(dict(key=key, raw_method=raw_method, err_type=err_type, CCS_type=CCS_type))
+        kw4.update(dict(show_legend=i == 1, is_log=True, colors=colors, dpi=dpi, last_row=False))
+        kw4.update(dict(noise=CCPS_stat, CCS_variant="CCPS"))
+        ax_CCS(**kw4)
+    # 2nd CCS row: CCTS; 1st was done above
+    for i in range(3):
+        axes["CCS"][i+3] = fig.add_subplot(gs[8:11, i * 3 + 1])
+        params = DD_keys[i]
+        kw4.update(dict(ax=axes["CCS"][i+3]))
+        kw4.update(dict(CCS_arrs=DD[params]["CCS_arrs"], params=params))
+        kw4.update(dict(spl=spl_current, show_legend=i == 1, last_row=True))
+        kw4.update(dict(noise=CCTS_stat, CCS_variant="CCTS"))
+        ax_CCS(**kw4)
+    text_labels = ["A", "B", "C"]  # panel label list
     for i in range(len(text_labels)):
         axlabels = [fig.add_subplot(gs[i * 4 : i * 4 + 3, 0])]
-        if varb:
-            axlabels.append(fig2.add_subplot(gs[i * 4 : i * 4 + 3, 0]))
         for axlabel in axlabels:
             axlabel.set_frame_on(False)
             axlabel.set_axis_off()  # same as ax.axis('off')
             kw5 = dict(fontsize=17, horizontalalignment="center", transform=axlabel.transAxes)
             axlabel.text(-2.4, 1.05, f"{text_labels[i]}", **kw5)
     saveNclose427(fig, fname + "_const", dpi=dpi, sub_folder_name=sub_folder_name)
-    if varb:
-        saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
 
 
-def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, annotate=None):
-    """
-    generates a graph for each beta in beta_arr
-
-    Kwargs
-    ------
-    - sub_folder_name (str):
-        the name of the folder in f"output/{whatnot}/" to store the plots
-        where <whatnot> is defined in saveNclose427()
-    - transparent (bool): whether we would use transparent background for output
-    """
-    if sub_folder_name == "":
-        sub_folder_name = "graphs_singletons"
-    regType, p, n = tup  # unpack tup
-    DD = plot_side(beta_arr=beta_arr)(tup)
-    colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    height_ratios, width_ratios = [1, 4, 5], [17, 1]
-    kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
-    kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
-    gs = GridSpec(**kw1)
-
-    # calculate A_hat based on analytic prediction
-    eigvals, eigvecs = np.linalg.eigh(DD[tup]["GTDict"]["A"])
-    eigvals = np.diag(eigvals)  # convert eigval list into eigval matrix 𝚲
-    for b in beta_arr:
-        if np.isinf(b):  # inf is the same as ground truth
-            fname = f"SierpinskiGraph(beta=inf,regType={regType},p={p},n={n})"
-            A = DD[tup]["GTDict"]["A"]
-        else:
-            fname = f"SierpinskiGraph(beta={b:.3f},regType={regType},p={p},n={n})"
-            Lambda = (1 - np.exp(-b)) * eigvals / (1 - np.exp(-b) * eigvals)
-            A = eigvecs @ Lambda @ (eigvecs.T)  # this works if A is symmetric (regularized)
-
-        fig = plt.figure(figsize=[6, 4.5])  # initialize
-        ax = fig.add_subplot(gs[:, :])
-        axcb = fig.add_subplot(gs[1, -1])  # Edge Weight colorbar
-        # axt = fig.add_subplot(gs[0, :])  # title axis
-        kw3 = dict(ax=ax, axcb=axcb, axt=None, fig=fig, dpi=dpi, bA=[b, A])
-        kw3.update(dict(params=tup, colors=colors, annotate=annotate))
-        kw3.update(dict(nodeList=DD[tup]["Sier"].nodeList, GTDict=DD[tup]["GTDict"]))
-        ax_Graph(**kw3)
-        saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name, transparent=transparent)
-
-
-def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
-           noise=None, spl=-1, varb=False, err_type='ste', CCS_type='mean', show_legend=False,
-           is_log=True, colors=None, dpi=None, last_row=False):
+def ax_CCS(ax, x, CCS_arrs, params, key, CCS_plot_type="CCS", raw_method=None,
+           noise=None, spl=-1, err_type='ste', CCS_type='mean', CCS_variant="CCS",
+           show_legend=False, is_log=True, colors=None, dpi=None, last_row=False):
     """
     Args
     ----
@@ -614,9 +333,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
     - spl (int or list): what indices of sample to draw data from CCS_stat; -1 is the last sample
-    - varb (bool): whether we draw negative beta (variable beta) or not
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
+    - CCS_variant (str): CCS, CCPS, CCTS; this refers to type of noise in <noise> & key in CCS_arrs
     - show_legend (bool): whether we show simulation parameters
     - is_log (bool): if True then use log scale on x axis.
     - last_row (bool): whether it is at last row
@@ -647,8 +366,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     (regType, p, n) = params
+    CCS_arr = CCS_arrs[CCS_variant]  # this could be CCS_arr, CCPS_arr, or CCTS_arr
     n_level = CCS_arr.shape[2]
-    if n_level == n-1:  # normally there are only n-1* levels (since CCS is function of 2 lvs)
+    if n_level == n - 1:  # normally there are only n-1* levels (since CCS is function of 2 lvs)
         pass
     elif n_level == n:  # *it could be violated, due to regularization
         n_level -= 1  # don't show higher level introduced by regularization
@@ -660,11 +380,11 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         CCS_type_slice = 1
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
     xlabel = r"Shuffling Parameter $\beta$"
-    ylabel = "Ratio of Means of Two Consecutive Levels"
+    ylabel = f"{CCS_variant}"
     if CCS_plot_type == "sum":
         ylabel = "Sum of CCS Across Levels"
     if regType in [0, 1, 2, 3]:
-        title = fr"Cross-Cluster Surprisal of $^{regType}S_{p:d}^{n:d}$"
+        title = fr"{CCS_variant} of $^{regType}S_{p:d}^{n:d}$"
     else:
         raise NotImplementedError(f"<regType>={regType} is not implemented")
 
@@ -673,15 +393,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         # n_agents = noise["mean"][params][spl, 1, 0]  # since all β have same group size, take 0
         n_steps = noise["mean"][params][spl, 2, 0]  # ditto but w/ walk length
         topy, s = 0.94, 0.06
-        # beta_type = "both" if varb else "constant"
-        # ax.text(0.5, topy, f"n_agents={n_agents:.0f}", **styles_txt)
         ax.text(0.80, topy - 1 * s * 0, f"walk length={n_steps:.0f}", **styles_txt)
-        # if raw_method[-6:] == "median":  # show errorbar type to be ste_median
-        #     ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
-        # else: # identical: standard error (which is std of the statistic)
-        #     ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
-        # ax.text(0.5, topy - 3 * s, f"CCS_type={CCS_type}", **styles_txt)
-        # ax.text(0.5, topy - 4 * s, f"beta_type={beta_type}", **styles_txt)
 
     if noise is not None:
         bs = None  # find where <0 beta starts (negative index)
@@ -705,16 +417,12 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     def temp_a1(i):  # draw CCS: analytical, noise constant, noise dynamic
         sty1.update(dict(color=cmap(i)))
         if show_legend:
-            sty1.update(dict(label=f"lv{i+1}/lv{i+2}"))
+            if CCS_variant == "CCPS":
+                sty1.update(dict(label=f"lv{i+1}-lv{i+2}"))
+            else:
+                sty1.update(dict(label=f"lv{i+1}/lv{i+2}"))
         ax.plot(x, CCS_arr[:, CCS_type_slice, i], **sty1)  # plot analytical curve
         if noise is not None:  # put scatter points of simulated results in
-            if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
-                kw1 = dict(color=cmap(i), zorder=1)
-                y_mean = noise["mean"][params][spl, 3 + i, bs]
-                y_err = noise[err_type][params][spl, 3 + i, bs]
-                ax.plot(ax.get_xlim(), [y_mean] * 2, **kw1)  # draw line
-                kw1.update(dict(y1 = [y_mean - y_err] * 2, y2 = [y_mean + y_err] * 2))
-                ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
             # plot fixed beta (scatter plot)
             sty2 = dict(linestyle="None", capsize=4.0, marker=".", markersize=11)
             sty2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
@@ -763,14 +471,6 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         ax.plot(x, ysal, **sty1)  # plot analytical curve
         if noise is not None:  # put scatter points of simulated results in
             ts2 = slice(3, 3 + n_level)
-            if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
-                kw1 = dict(color=cmap(0), zorder=1)
-                ysal_mean = np.sum(noise["mean"][params][spl, ts2, bs], axis=0)
-                ysal_err = np.sqrt(np.sum(noise[err_type][params][spl, ts2, bs]**2, axis=0))
-                ax.plot(ax.get_xlim(), [ysal_mean] * 2, **kw1)  # draw line
-                kw1.update(dict(y1 = [ysal_mean - ysal_err] * 2, y2 = [ysal_mean + ysal_err] * 2))
-                ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
-            # plot fixed beta
             if raw_method is None:  # scatter plot
                 sty2 = dict(linestyle="None", capsize=4.0, marker=".", markersize=11)
                 sty2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
@@ -785,6 +485,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
                 ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
 
     def temp_b1(i):  # annotate CCS plot with maxima
+        return 0  # no annotation for now (CCS, CCPS, CCTS)
         xmaxs[i] = x[np.argmax(CCS_arr[:, CCS_type_slice, i])]
         ymaxs[i] = np.max(CCS_arr[:, CCS_type_slice, i])
         # texts[i] = f"({xmaxs[i]:.3f},{ymaxs[i]:.3f})"  # show both beta and CCS
@@ -825,11 +526,19 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             temp_a1(i)
             temp_b1(i)  # put peak val on plot
 
-        if key in ["n", "reg_n"]:
-            ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
-        else:
-            ax.set_ylim((0.9, 1.63))  # for regType=3, p=5, n=3 max CCS is about 1.63
-        ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
+        if CCS_variant == "CCS":
+            if key in ["n", "reg_n"]:
+                ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
+            else:
+                ax.set_ylim((0.9, 1.63))  # for regType=3, p=5, n=3 max CCS is about 1.63
+            ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
+        elif CCS_variant == "CCPS":  # only key in ["r"]: [0,1,3] [3] [3]
+            ax.set_ylim((-0.07, 0.05))  # for regType=0,1,3, p=3, n=3 CCPS range is -0.07 ~ 0.05
+            ax.plot(ax.get_xlim(), (0, 0), "--", color="grey", zorder=0)  # draw y=0 line in grey
+        elif CCS_variant == "CCTS":  # only key in ["r"]: [0,1,3] [3] [3]
+            ax.set_ylim((0, 11))  # for regType=0,1,3, p=3, n=3 CCTS range is 0 ~ 12
+            ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
+
     elif CCS_plot_type == "sum":  # plot summation CCS graph
         temp_a2()
         xmaxs = temp_b2()
@@ -877,7 +586,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
 
 
 def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
-             axt=None, colors=None, dpi=None, annotate=None, bA=None):
+             axt=None, colors=None, dpi=None, annotate=None, bA=None, col=None):
     """
     Args
     ----
@@ -893,6 +602,8 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
     - bA (list=[float, np.arr]):
         -bA[0]: beta
         -bA[1]: transition prob matrix to draw; if not None, draw a single graph of A
+    - col (int): column of panel; should be corresponding to 3 different bA;
+        if bA is not None, col should not be None as well
     """
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
@@ -914,6 +625,8 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
         title = "Sierpiński Graph of " + r"$^{}$".format(regType) + r"$S_{:d}^{:d}$".format(p, n)
     else:
         raise ValueError("<regType> is unclear.")
+    if bA is not None:
+        title = "Learned Graph of " + r"$^{}$".format(regType) + r"$S_{:d}^{:d}$".format(p, n)
 
     # use default PMMM theme color
     # draw nodes
@@ -933,30 +646,45 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
             ax.annotate(str(p_ary(i, p=base_p, L=n)), xy=(x, y), xytext=(x, y), **annokw)
     # draw edges
     if bA is not None:  # a singleton graph with transition prob edge weight coloring
-        beta, A = bA
+        beta, A = bA  # assume it's from regType=3, p=3, n=3
         title += fr" ($\beta=+\infty$)" if np.isinf(beta) else fr" ($\beta={beta:.3f}$)"
         n_ = np.shape(A)[0]  # number of nodes
-        RGBA = np.zeros((round(n_*(n_-1)/2), 4))
-        RGBA[:,1] = 0.5 # for green (not sure if this is color 'g')
-        max_prob = A.max()
+        RGBA_within, RGBA_between = set_community_color(n_)
+        colors427 = [[x for x in RGBA_within[0, :]], [x for x in RGBA_between[0, :]]]
+        # max_prob = A.max()
+        max_prob = 1/3
+        A_gt = make_SierpinskiGraph427(3, 3, norm=True, regType=3, use_set=False)["A"]
+        masks = make_masks(3, 3, 3, A_gt, ccps_type=2)
         counter = 0
-        for i in range(0,n_):
-            for j in range(i+1,n_): # undirected (A is symmetric)
+        for i in range(0, n_):
+            for j in range(i+1, n_): # undirected (A is symmetric)
                 # 🔴 assuming nodeList[i][0] = i
                 x = [nodeList[i][1],nodeList[j][1]]
                 y = [nodeList[i][2],nodeList[j][2]]
-                RGBA[counter, 3] = A[i, j] / max_prob  # set alpha to 1 (opaque) if max prob
-                ax.plot(x, y, color=RGBA[counter,:], zorder=1)
+                if masks[f"lv{2}"][i, j] or masks[f"lv{1}"][i, j]:  # within level 2 OR level 1
+                    # set alpha to 1 (opaque) if max prob
+                    RGBA_within[counter, 3] = A[i, j] / max_prob
+                    ax.plot(x, y, color=RGBA_within[counter,:], zorder=1)
+                if masks[f"lv{3}"][i, j]:  # within level 3
+                    # set alpha to 1 (opaque) if max prob
+                    RGBA_between[counter, 3] = A[i, j] / max_prob
+                    ax.plot(x, y, color=RGBA_between[counter,:], zorder=1)
                 counter += 1
-        rgba, nu = [[0,0.5,0,0], [0,0.5,0,1]], 5
-        cmap = LinearSegmentedColormap.from_list("custom edge color", rgba, N=nu)
-        norm = Normalize(vmin=0, vmax=nu - 1)
-        kwargs_cax = dict(cax=axcb, drawedges=False)
-        cbr = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), **kwargs_cax)
-        cbr.set_ticks([(nu - 1) * (2 * i + 1) / (2 * nu) for i in range(nu)])
-        cbr.set_ticklabels([f"{x:.2f}" for x in np.linspace(0, max_prob, nu)])
-        # cbr.ax.tick_params(labelsize=9)  # no effect
-        cbrLabel427(axcb, "transition probability")
+        nu = 5
+        tran_prob_title = ["Within Level 1,2", "Between Level 2"]
+        if col in [0, 1]:  # show red/blue colorbar
+            rgba = [[x for x in colors427[col]], [x for x in colors427[col]]]
+            rgba[1][3] = 1  # opaque
+            cmap = LinearSegmentedColormap.from_list("custom edge color", rgba, N=nu)
+            norm = Normalize(vmin=0, vmax=nu - 1)
+            kwargs_cax = dict(cax=axcb, drawedges=False)
+            cbr = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=cmap), **kwargs_cax)
+            cbr.set_ticks([(nu - 1) * (2 * i + 1) / (2 * nu) for i in range(nu)])
+            cbr.set_ticklabels([f"{x:.2f}" for x in np.linspace(0, max_prob, nu)])
+            # cbr.ax.tick_params(labelsize=9)  # no effect
+            cbrLabel427(axcb, f"Transition Probability ({tran_prob_title[col]})")
+        else:
+            axcb.set_axis_off()  # don't show 3rd colorbar
     else:  # edge level coloring
         cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:nu], N=nu)
         norm = Normalize(vmin=0, vmax=nu - 1)
@@ -1013,5 +741,22 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
         # plt.legend(loc='upper left')
 
 
+def set_community_color(n_):
+    """
+    within level 2 community vs. between level 2 community
+    color for w/in: #ef8a62 (239,138,98) (red) | between: #67a9cf (103,169,207) (blue)
+    https://colorbrewer2.org/#type=diverging&scheme=RdBu&n=3
+    """
+    RGBA_within = np.zeros((round(n_*(n_-1)/2), 4))
+    RGBA_between = np.zeros((round(n_*(n_-1)/2), 4))
+    RGBA_within[:, 0] = 239/255
+    RGBA_within[:, 1] = 138/255
+    RGBA_within[:, 2] = 98/255
+    RGBA_between[:, 0] = 103/255
+    RGBA_between[:, 1] = 169/255
+    RGBA_between[:, 2] = 207/255
+    return RGBA_within, RGBA_between
+
+
 if __name__ == "__main__":
-    main_Sierpinski427()
+    CCS_main()

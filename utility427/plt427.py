@@ -66,6 +66,10 @@ def colors_selector(str=None, reverse=True):
             colors = ["#feedde", "#fdd0a2", "#fdae6b", "#fd8d3c", "#f16913", "#d94801", "#8c2d04"]
         elif str == "7-class Greens":
             colors = ["#edf8e9", "#c7e9c0", "#a1d99b", "#74c476", "#41ab5d", "#238b45", "#005a32"]
+        elif str == "7-class Blues":
+            colors = ["#eff3ff", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#084594"]
+        elif str == "7-class Reds":
+            colors = ["#fee5d9", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#99000d"]
         elif str == "5-class Greys":
             colors = ["#f7f7f7", "#cccccc", "#969696", "#636363", "#252525"]
         elif str == "5-class Purples":
@@ -74,6 +78,10 @@ def colors_selector(str=None, reverse=True):
             colors = ["#feedde", "#fdbe85", "#fd8d3c", "#e6550d", "#a63603"]
         elif str == "5-class Greens":
             colors = ["#edf8e9", "#bae4b3", "#74c476", "#31a354", "#006d2c"]
+        elif str == "5-class Blues":
+            colors = ["#eff3ff", "#bdd7e7", "#6baed6", "#3182bd", "#08519c"]
+        elif str == "5-class Reds":
+            colors = ["#fee5d9", "#fcae91", "#fb6a4a", "#de2d26", "#a50f15"]
         elif str == "":
             colors = ["#", "#", "#", "#", "#", "#", "#"]
     return colors[::-1] if reverse else colors

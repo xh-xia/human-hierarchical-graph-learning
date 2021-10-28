@@ -9,6 +9,7 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 from utility427.helper427 import set_dir427
 from utility427.math427 import step_funct, A2P, np
+from utility427.Sierpinski427 import p2ten, p_ary
 
 
 def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
@@ -18,7 +19,7 @@ def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
     assume "npy_files" is contained in where this script is at
     the npy file contains a dictionary which has two keys:
     'A' (nparr): transition probability matrix
-    'masks' (dict): [f"{'lv'}{l}"] is a nparr containing mask of level l edge
+    'masks' (dict): [f"lv{l}"] is a nparr containing mask of level l edge
 
     Args:
     -----
@@ -163,27 +164,29 @@ class GLsim:
         }
 
 
-def CCS(counts_me, regType, p, n, seed=0):
+def CCS(counts_me, regType, p, n, seed=0, analytic_comp=False):
     """simplified & modified heavily from CCS_analysis in CCS427.py
     This function finds CCS for given transition prob matrix
     It calculates CCS for all P_hat in count_ma_me.
-    Args:
-    -------
-    counts_me (3D np.arr): simulated result
-    regType, p, n: regularization type, power, level
-    masks (dict): masks[f"{'lv'}{l}"] is level-l mask for P
+    Args
+    ----
+    - counts_me (3D np.arr): simulated result
+    - regType, p, n: regularization type, power, level
+    - masks (dict): masks[f"lv{l}"] is level-l mask for P
 
-    Return:
-    -------
-    CCS_arr (3D nparr):
+    Return
+    ------
+    - CCS_arr (3D nparr):
     since CCS is for every 2 consecutive lvs, we have only (lv-1) entries out of lv levels
-        CCS_arr[s,0,l-1]: CCS of means at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
-        CCS_arr[s,1,l-1]: CCS of stds at sample s for level l (f"{'lv'}{l}{'-'}{l+1}") for current agent
+        CCS_arr[s,0,l-1]: CCS of means at sample s for level l (f"lv{l}{'-'}{l+1}") for current agent
+        CCS_arr[s,1,l-1]: CCS of stds at sample s for level l (f"lv{l}{'-'}{l+1}") for current agent
     """
     _, masks = load_Sier(regType, p, n)
-    # ↓ convert counts_me into transition prob matrix
-    np.allclose(counts_me, 0)  # don't ask me why, but this fixes the Ps_me containing nan issue
-    Ps_me = A2P(counts_me, axis=2)  # get transition probability matrix from counts
+    if analytic_comp:  # assume counts_me is transition prob matrix
+        Ps_me = counts_me[np.newaxis, ...]  # since it's analytic, there is no sample (=1)
+    else:  # ↓ convert counts_me into transition prob matrix
+        np.allclose(counts_me, 0)  # don't ask me why, but this fixes the Ps_me containing nan issue
+        Ps_me = A2P(counts_me, axis=2)  # get transition probability matrix from counts
 
     list_lv = [
         int(k[2:]) for k in masks.keys()
@@ -196,8 +199,8 @@ def CCS(counts_me, regType, p, n, seed=0):
         mean_weights = [0.0 for i in range(lv)]
         std_weights = [0.0 for i in range(lv)]
         for l in range(1, lv + 1):
-            mean_weights[l - 1] = np.mean(Ps_me[s][np.nonzero(masks[f"{'lv'}{l}"])])
-            std_weights[l - 1] = np.std(Ps_me[s][np.nonzero(masks[f"{'lv'}{l}"])])
+            mean_weights[l - 1] = np.mean(Ps_me[s][np.nonzero(masks[f"lv{l}"])])
+            std_weights[l - 1] = np.std(Ps_me[s][np.nonzero(masks[f"lv{l}"])])
         # temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
         # temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
         # print("DEBUG mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
@@ -210,3 +213,189 @@ def CCS(counts_me, regType, p, n, seed=0):
 
     return CCS_arr
 
+
+def CCPS(counts_me, regType, p, n, ccps_type=1, analytic_comp=False, scale=1):
+    """
+    similar to Cross-Community Surprisal (CCS),
+    Cross-Community Pseudo-Surprisal (CCPS) is also defined per 2 consecutive levels
+    but on spurious edges and across communities (instead of CCS's real edges and across nodes)
+    for both CCS and CCPS, l=1,2,...,n-1
+    level-l CCS: mean(W(lv=l)) / mean(W(lv=l+1)) | finer:coarser
+    level-l CCPS: mean(W(w/in lv=l)) - mean(W(between lv=l)) | finer:coarser | spurious only
+    level-l CCTS: mean(W(w/in lv=l)) - mean(W(between lv=l)) | finer:coarser | all edges
+    NOTE: W(w/in lv=l+1) = W(between lv=l)
+
+    Kwargs
+    ------
+    - ccps_type (int):
+        1: spurious edges only
+        2: both spurious and real edges; this we can do divide since CCS works
+            however: scaling is a problem in terms of interpretation
+            1) mean(), the curve = 1 at beta->0; but curve is some weird large number at beta->infty
+            because as lv increases, the edge becomes sparser in ground truth, diluting the mean()
+            2) divide sum by num of real edges in groud truth,
+            the curve is some weird small number (~0) at beta->0; but curve = 1 at beta->infty:
+            assume we only count each edge once: (only `mean_weights` is modified)
+            regType in [0, 3]: mean_weights[l - 1] := sum(w/in lv=l) / p^(n-l+1)
+            regType in [1]: mean_weights[l - 1] := sum(w/in lv=l) / p^(n-l+1) if l<n+1
+                            mean_weights[l - 1] := sum(w/in lv=l) / p if l=n+1
+            intuition behind results (regardless of scaling):
+            at ground truth (beta=infty), max cross-community surprisal (different from CCS result)
+            but as beta decreases, it turns out higher lv CCTS reaches max surprisal earlier;
+            sub-max surprisal means "leakage" biases towards higher level;
+            earlier means difference of transition prob "leakage" between two consecutive levels
+            is more pronounced at lower level (leakage is more obvious at lower levels)
+            from another perspective:
+            learned graph is losing community structure faster at lower level as beta decreases
+    - scale (int): ccps_type=2 only; 1 -> mean() 2-> divide sum by num of real edges in groud truth
+    """
+    A, _ = load_Sier(regType, p, n)
+    A[A>0] = 1  # adjacency matrix of ground truth
+    masks = make_masks(regType, p, n, A.astype(int), ccps_type)
+    if analytic_comp:  # assume counts_me is transition prob matrix
+        Ps_me = counts_me[np.newaxis, ...]  # since it's analytic, there is no sample (=1)
+    else:  # ↓ convert counts_me into transition prob matrix
+        np.allclose(counts_me, 0)  # don't ask me why, but this fixes the Ps_me containing nan issue
+        Ps_me = A2P(counts_me, axis=2)  # get transition probability matrix from counts
+
+    if regType in [0, 3]:
+        lv = n  # (max) hierarchical level (also the coarsest level) for node community
+    elif regType in [1]:
+        lv = n + 1
+    else:
+        raise NotImplementedError(f"regType={regType} is not implemented yet")
+
+    CCPS_arr = np.zeros((Ps_me.shape[0], 2, lv - 1))
+    # ↓ calculation
+    for s in range(Ps_me.shape[0]):  # s stand for sample
+        mean_weights = [0.0 for i in range(lv)]
+        std_weights = [0.0 for i in range(lv)]
+        for l in range(1, lv + 1):
+            if ccps_type == 1 and l == 1:  # there is no spurious edge in level 1 community
+                mean_weights[l - 1] = 0
+                std_weights[l - 1] = 0
+            else:
+                if scale == 1 or ccps_type == 1:
+                    mean_weights[l - 1] = np.mean(Ps_me[s][masks[f"lv{l}"]])
+                elif scale == 2 and ccps_type == 2:
+                    if l < n + 1:
+                        mean_weights[l - 1] = np.sum(Ps_me[s][masks[f"lv{l}"]]) / round(p ** (n - l + 1))
+                    else:  # l=n+1 i.e., regType in [1]; since otherwise l can only reach n
+                        mean_weights[l - 1] = np.sum(Ps_me[s][masks[f"lv{l}"]]) / p
+                else:
+                    raise NotImplementedError(f"scale={scale} is invalid")
+                std_weights[l - 1] = np.std(Ps_me[s][masks[f"lv{l}"]])
+        if ccps_type == 1:  # divide -> unsteady since both numerator and denominator can be small
+            temp1 = np.subtract(mean_weights[:-1], mean_weights[1:])
+            temp2 = np.subtract(std_weights[:-1], std_weights[1:])
+        elif ccps_type == 2:  # divide -> steady since CCS is steady
+            temp1 = np.divide(mean_weights[:-1], mean_weights[1:])
+            temp2 = np.divide(std_weights[:-1], std_weights[1:])
+        else:
+            raise NotImplementedError("currently only ccps_type=1 or 2 is implemented")
+        for l in range(0, lv - 1):
+            CCPS_arr[s, 0, l] = temp1[l]
+            CCPS_arr[s, 1, l] = temp2[l]
+
+    return CCPS_arr
+
+
+def make_masks(regType, p, n, A_real, ccps_type):
+    """
+    calculate on the fly instead of loading local files
+    this is to find spurious edges on multiple hierarchical levels
+    given how Sierpiński family is defined, level 1 community is the basic motif, fully connected
+    which means w/in lv=1 community there are no spurious edges
+    the way I define w/in or between for spurious edges is as follows:
+    w/in lv=l+1 community := between lv=l community
+    in the script I will use w/in consistently,
+    for intuition it's more convenient to use both w/in and between when defining CCPS at lv=l:
+        w/in lv=l - between lv=l
+    AKA w/in lv=l - w/in lv=l+1
+
+    Args
+    ----
+    - A_real (np.arr): adjacency matrix (assume int entry) for real edges
+    - ccps_type (int):
+        1: spurious edges only
+        2: both spurious and real edges; this we can do divide since CCS works
+    """
+    # for now we only implement it for regType=0,1,3 (no reg, 1-node, and self-loop)
+    if regType in [0, 3]:
+        N = round(p**n)
+        nodeidx_p = [p_ary(x, p=p, L=n) for x in range(N)]
+        masks = dict()
+        cum_mask = np.zeros((N, N), dtype=bool)  # cumulative via OR(entry_i==1,i=1,...)
+        for l in range(1, n + 1):
+            asm = [p2ten(pstr[0 : n - l], p=p) for pstr in nodeidx_p]  # community assignments
+            masks[f"lv{l}"] = np.zeros((N, N), dtype=bool)
+            if ccps_type == 1:
+                if l == 1:
+                    continue  # because there are no spurious edges w/in lv=1 community
+                for i in range(N):  # no self-loop; assume undirected
+                    for j in range(i + 1, N):
+                        b = (A_real[i, j]==0) and (asm[i] == asm[j]) and (not cum_mask[i, j])
+                        masks[f"lv{l}"][i, j] = b
+                        masks[f"lv{l}"][j, i] = b
+                        if masks[f"lv{l}"][i, j]:
+                            cum_mask[i, j] = True
+                            cum_mask[j, i] = True
+            elif ccps_type == 2:
+                for i in range(N):  # no self-loop; assume undirected
+                    for j in range(i + 1, N):
+                        b = (asm[i] == asm[j]) and (not cum_mask[i, j])
+                        masks[f"lv{l}"][i, j] = b
+                        masks[f"lv{l}"][j, i] = b
+                        if masks[f"lv{l}"][i, j]:
+                            cum_mask[i, j] = True
+                            cum_mask[j, i] = True
+            else:
+                raise NotImplementedError("currently only ccps_type=1 or 2 is implemented")
+    elif regType in [1]:
+        N = round(p**n) + 1
+        nodeidx_p = [p_ary(x, p=p, L=n + 1) for x in range(N)]
+        masks = dict()
+        cum_mask = np.zeros((N, N), dtype=bool)  # cumulative via OR(entry_i==1,i=1,...)
+        for l in range(1, n + 2):
+            asm = [p2ten(pstr[0 : n - l + 1], p=p) for pstr in nodeidx_p]  # community assignments
+            masks[f"lv{l}"] = np.zeros((N, N), dtype=bool)
+            if ccps_type == 1:
+                if l == 1:
+                    continue  # because there are no spurious edges w/in lv=1 community
+                for i in range(N):  # no self-loop; assume undirected
+                    for j in range(i + 1, N):
+                        b = (A_real[i, j]==0) and (asm[i] == asm[j]) and (not cum_mask[i, j])
+                        masks[f"lv{l}"][i, j] = b
+                        masks[f"lv{l}"][j, i] = b
+                        if masks[f"lv{l}"][i, j]:
+                            cum_mask[i, j] = True
+                            cum_mask[j, i] = True
+            elif ccps_type == 2:
+                for i in range(N):  # no self-loop; assume undirected
+                    for j in range(i + 1, N):
+                        b = (asm[i] == asm[j]) and (not cum_mask[i, j])
+                        masks[f"lv{l}"][i, j] = b
+                        masks[f"lv{l}"][j, i] = b
+                        if masks[f"lv{l}"][i, j]:
+                            cum_mask[i, j] = True
+                            cum_mask[j, i] = True
+            else:
+                raise NotImplementedError("currently only ccps_type=1 or 2 is implemented")
+    else:
+        raise NotImplementedError(f"regType={regType} is not implemented yet")
+
+    return masks
+
+
+""" DEBUG
+A, _ = load_Sier(1, 3, 3)
+A[A>0] = 1
+A = A.astype(int)
+temp = make_masks(1, 3, 3, A)
+
+temp2 = temp['lv2'].astype(int) + temp['lv3'].astype(int) + temp['lv4'].astype(int) + A
+print(f"DEBUG temp2:\n{temp2}")
+print(f"DEBUG temp:\n{temp['lv2'].astype(int)}")
+print(f"DEBUG temp:\n{temp['lv3'].astype(int)}")
+print(f"DEBUG temp:\n{temp['lv4'].astype(int)}")
+"""

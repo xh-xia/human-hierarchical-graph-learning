@@ -9,7 +9,7 @@ Created: Thursday, ‎March ‎25, ‎2021, ‏‎10:30:09 AM (EDT)
 
 import signac as sn
 
-from RW_Graph_Class import CCS
+from RW_Graph_Class import CCS, CCPS
 
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
@@ -35,8 +35,9 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
 """
 
 is_operation = True  # whether CCS_compute is done as @operation in signac
-sub_folder_name = "median_and_ste" # folder inside output folder to store all CCS_stat
+sub_folder_name = "CCS,CCPS,CCTS" # folder inside output folder to store all CCS_stat
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
+CCS_key = "CCPS2"  # options: CCS, CCPS, CCPS2
 
 KEYS = ["mean", "ste", "median", "ste_median"]  # keys of CCS_stat
 if save_raw:
@@ -48,7 +49,7 @@ def print_progress(counter, tot=28000):
         print(f"Progresss: {counter}/{tot}")
 
 
-def main_CCS_stat():
+def main_CCS_stat(CCS_key):
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()
@@ -71,6 +72,8 @@ def main_CCS_stat():
     for i in range(len(params["beta_classes"])):
         counter = 0  # to report sub-progress
         for regType, p, n in params["pd"]:
+            if regType == 2:  # this is never used in CCS, CCPS, or CCTS
+                continue  # skip the rest and go back to the current loop of regType, p, n
             job_criteria = {
                 "key_class": params["key_class"],
                 "beta_class": params["beta_classes"][i],
@@ -89,12 +92,20 @@ def main_CCS_stat():
                 with job.data:
                     nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
                     if is_operation:
-                        temp = job.data["CCS"][:]
+                        temp = job.data[CCS_key][:]
                     else:
                         # CCS_compute here (not as @operation)
                         kw_CCS = dict(counts_me=job.data["GLsim_data"]["counts_me"][:])
                         kw_CCS.update(dict(regType=job.sp.regType, p=job.sp.p, n=job.sp.n))
-                        temp = CCS(**kw_CCS, seed=job.sp.seed)
+                        if CCS_key == "CCS":
+                            temp = CCS(**kw_CCS, seed=job.sp.seed)
+                        elif CCS_key == "CCPS":
+                            temp = CCPS(**kw_CCS, ccps_type=1)
+                        elif CCS_key == "CCPS2":
+                            temp = CCPS(**kw_CCS, ccps_type=2)
+
+                        else:
+                            raise NotImplementedError("currently only CCS and CCPS are valid")
                 for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
                     stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
                     # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
@@ -121,7 +132,7 @@ def main_CCS_stat():
         print(f"loop {i}: {params['beta_classes'][i]} has {counter} jobs")
         fname = set_dir427() + f"\\output\\{sub_folder_name}\\"
         mkdir_p(fname)
-        fname += f"CCS_stat_{CCS_type}_{params['key_class']}_{params['beta_classes'][i]}"
+        fname += f"{CCS_key}_stat_{CCS_type}_{params['key_class']}_{params['beta_classes'][i]}"
         fname += f"_{params['n_agents']:d}"
         np.save(fname, CCS_stat)
 
@@ -129,4 +140,4 @@ def main_CCS_stat():
 
 
 if __name__ == "__main__":
-    main_CCS_stat()
+    main_CCS_stat(CCS_key)

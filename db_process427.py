@@ -24,11 +24,12 @@ def main():
     11: full n-back with break, demographics; ver = "24.427"
     12: have edgelv & hamiltonian in db now; should be about complete; ver = "25.427"
         when we change tablename, only change SUFFIX in custom_models.py and config.txt
+    13: _e427_live1_5subs
     """
-    which_db = 12  # which database we want to parse
+    which_db = 13  # which database we want to parse
     ver = "25.427"
     cwd = set_dir427()
-    folder_path = "\\input\\database\\"
+    folder_path = "/input/database/"
     csvs = ["experiment", "participants", "walkdata"]
     df_dict = dict()
     csv_dict = get_csv_name(cwd + folder_path, csvs, which_test=which_db)
@@ -36,7 +37,8 @@ def main():
         df_dict[name] = pd.read_csv(csv_dict[name], index_col=0)
         # print(df_dict[name].columns.values)
 
-    get_subjects_data(df_dict, db_ver=[which_db, ver], live_only=False, complete=False)
+    kwargs = dict(db_ver=[which_db, ver], live_only=True, complete=False)
+    get_subjects_data(df_dict, **kwargs)
 
 
 def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
@@ -86,7 +88,7 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
     which_db, ver = db_ver  # unpack list
     df_participants = df_dict["participants"]
     df_walkdata = df_dict["walkdata"]
-    print(f"DEBUG df_walkdata['walk_one']: {df_walkdata['walk_one']}")
+    # print(f"DEBUG df_walkdata['walk_one']: {df_walkdata['walk_one']}")
     is_current = df_participants["codeversion"] == ver
     df = df_participants[is_current]
     """ from here on we work with modified copy of df_participants """
@@ -115,7 +117,6 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
             finger_mapping[i] = finger_mapping[i].split(", ")
             finger_mapping[i] = [int(x == "true") for x in finger_mapping[i]]  # convert str to int
         # print(f"DEBUG finger_mapping: {finger_mapping}")
-        print(f"DEBUG bonus_info: {bonus_info}")
 
         if isinstance(df.loc[UID]["datastring"], float):  # assume if it's float, it's np.nan
             print(f"{UID}'s datastring field is NaN (np.nan).")
@@ -136,7 +137,7 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
             'compressed_task_data': actual walk data
                 phase, stage, trial, node, correct, nTries, rt, response, target, keyCode, event, query
             'compressed_quiz_data': not very useful, only quiz data as indicated in the name
-            'completed_demo', 'completed_walk_one' (bool)
+            'completed_demo', 'completed_walk_one_a', 'completed_walk_one_b' (bool)
         data (list of dict): generally useless info on instruction pages
             has 4 fields (in each dict): current_trial, dateTime, trialdata, uniqueid
             it contains viewTime and information on viewing instruction pages
@@ -155,7 +156,8 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
         # demographics & free response
         data_dict[UID]["Resp"] = parse_response_data(questiondata)
 
-        completion = get_completion(questiondata)
+        completion, progress = get_completion(questiondata)
+        data_dict[UID]["progress_tuple"] = (bonus_info, progress)
         data_dict[UID]["df_n_back"] = None
         data_dict[UID]["df_task"] = None
         if completion["n_back_DONE"]:  # n-back
@@ -170,6 +172,8 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
                 start_trial=1 / 3,
                 first_trial_is_zero=False,
             )
+
+    print_progresses(data_dict, verbose=False)
 
     if complete:  # remove subjects who did not complete the whole experiment
         for k in data_dict:
@@ -194,11 +198,59 @@ def get_subjects_data(df_dict, db_ver, live_only=True, complete=True):
     return data_dict
 
 
+def print_progress(UID, bonus_info, progress):
+    if isinstance(bonus_info, str):
+        bonus_info = json.loads(bonus_info)  # json str -> dict
+        print(f'\nUID={UID}: ')
+        strs = f'walk_performance: {bonus_info["walk_one_perf"]}'
+        strs += f' | walk_bonus: {bonus_info["walk_one_bonus"]}'
+        strs += f' | total_bonus: {bonus_info["total_bonus"]}'
+        print(strs)
+        print(f'n-back progress: {progress["n_back"]} | walk progress: {progress["walk"]}')
+    elif isinstance(bonus_info, float):
+        if isnan(bonus_info):
+            print(f'\nUID={UID}: N/A')
+            print(f'n-back progress: {progress["n_back"]} | walk progress: {progress["walk"]}')
+    else:
+        raise ValueError(f"bonus_info type={type(bonus_info)} is unclear")
+
+
+def print_progresses(data_dict, verbose=True):
+    if verbose:
+        for UID in data_dict:
+            bonus_info, progress = data_dict[UID]["progress_tuple"]
+            print_progress(UID, bonus_info, progress)
+    else:
+        assignids_full = set()  # we will accept these assignment ids
+        for UID in data_dict:
+            bonus_info, progress = data_dict[UID]["progress_tuple"]
+            if isinstance(bonus_info, float):
+                continue
+            elif isinstance(bonus_info, str):
+                if progress["n_back"] == "390/390" and progress["walk"] == "1500/1500":
+                    assignid = UID.split(":")[1]
+                    if assignid not in assignids_full:
+                        assignids_full.add(assignid)
+                    else:
+                        raise Exception(f"assignment={assignid} completed full task twice?")
+
+        print(f"Full completion: 390/390 & 1500/1500")
+        for x in assignids_full:
+            print(f"'{x}'")
+        print("", end="\n\n")
+
+        print(f"Not full completion: < 390/390 | < 1500/1500")
+        for UID in data_dict:  # show those who did not have full completion
+            assignid = UID.split(":")[1]
+            if assignid not in assignids_full:
+                bonus_info, progress = data_dict[UID]["progress_tuple"]
+                print_progress(UID, bonus_info, progress)
+
+
 # region: parser functions
 """
 parser functions
 """
-
 
 def get_completion(questiondata):
     """find completion status in questiondata (i.e., json_dict["questiondata"])
@@ -206,18 +258,28 @@ def get_completion(questiondata):
 
     Return:
     -------
-    completion (dict): n_back_DONE, walk_a_DONE, walk_b_DONE
+    - completion (dict): n_back_DONE, walk_a_DONE, walk_b_DONE
         note: only walk_b_DONE==True means they completed the n-back and all graph learning tasks
         if n_back itself is completed, pd.df make_df_n_back() creates should have 390 rows.
+    - progress (dict): instead of binary result, show actual progress
     """
     completion = {"n_back_DONE": False, "walk_a_DONE": False, "walk_b_DONE": False}
+    progress = {"n_back": "N/A", "walk": "N/A"}
     if "n-back" in questiondata:  # not the most efficient way
-        completion["n_back_DONE"] = len(make_df_n_back(questiondata["n-back"]).index) == 390
+        n_back_progress = len(make_df_n_back(questiondata["n-back"]).index)
+        progress["n_back"] = f"{n_back_progress}/390"
+        completion["n_back_DONE"] = n_back_progress == 390
     if "completed_walk_one_a" in questiondata:
         completion["walk_a_DONE"] = questiondata["completed_walk_one_a"]
     if "completed_walk_one_b" in questiondata:
         completion["walk_b_DONE"] = questiondata["completed_walk_one_b"]
-    return completion
+
+    if "compressed_task_data" in questiondata:
+        task_data = decompress_pako(questiondata["compressed_task_data"])  # 'tis a list of dict
+        df_task = pd.DataFrame(task_data)
+        progress["walk"] = f'{df_task["trial"].iloc[-1] + 1}/1500'
+
+    return completion, progress
 
 
 def make_df_n_back(n_back_list):
@@ -240,7 +302,7 @@ def make_df_n_back(n_back_list):
     """
     n_back_data = decompress_pako(n_back_list)  # 'tis a list of dict
     df_n_back = pd.DataFrame(n_back_data)
-    print("DEBUG: n_back keys: \n", df_n_back.columns.values)
+    # print("DEBUG: n_back keys: \n", df_n_back.columns.values)
     # is_stim = df_n_back["trial_id"] == "stim"
     # df_n_back = df_n_back[is_stim]
     # print(df_n_back[["trial_id", "trial_type", "correct", "stim", "target"]])
@@ -279,7 +341,7 @@ def parse_n_back(df_n_back, walk_id, start_idx=0):
     df_n_back.rename_axis("idx", axis="rows", inplace=True)  # rename index title
 
     df_n_back.set_index(make_MultiIndex(df_n_back, start_idx), inplace=True)
-    print(f"DEBUG df_n_back.columns.values: {df_n_back.columns.values}")
+    # print(f"DEBUG df_n_back.columns.values: {df_n_back.columns.values}")
     # 1) add walk_id
     df_n_back["id"] = [walk_id] * len(df_n_back.index)
     # 2) filter according to section index to have only test_# groups left
@@ -401,22 +463,22 @@ def parse_task_data(
     questiondata, walk_id, first_trial_num=0, start_trial=None, first_trial_is_zero=True
 ):
     """
-    Args:
+    Args
     ----
-    questiondata (dict):
+    - questiondata (dict):
         use only below keys (for random walk data):
         "compressed_task_data", "completed_walk_one_a", "completed_walk_one_b"
-    walk_id (int): walk_id of current UID
-    first_trial_num (int): convention of the number of first trial
-    start_trial (int/float): where we start the trial
+    - walk_id (int): walk_id of current UID
+    - first_trial_num (int): convention of the number of first trial
+    - start_trial (int/float): where we start the trial
         if >=1: subset trials start_trial, start_trial+1, ..., end
         if <1: subset trials from trial round(tot_trial*start_trial) + x
         where tot_trial is total number of trials; x is the first trial number in the walk
-    first_trial_is_zero (bool):
+    - first_trial_is_zero (bool):
         if True, will throw error if the first trial number in the walk is not 0
 
-    Return:
-    -------
+    Return
+    ------
     df_task (df): modified df_task
         if there is an incorrect trial,
         there has to be a correct trial following it with same trial number
@@ -424,8 +486,8 @@ def parse_task_data(
     stat_dict (dict): statistics
 
 
-    Data Processing Rules:
-    ----------------------
+    Data Processing Rules
+    ---------------------
     1) remove demo trials
     2) reset trial number using <first_trial_num>; assume the first row after step 1 is first trial
     3) remove correct trial that follows from incorrect one, this may make rt smaller
@@ -633,13 +695,15 @@ def get_csv_name(cwd, csvs, which_test=0):
 
     temp = os.listdir(cwd)
     for name in temp:
+        if name == ".DS_Store":
+            continue
         if int(name.split(" ")[0]) == which_test:
             temp = name
             break
     else:  # run if nobreak
         raise Exception("<which_test> index is not found in given cwd.")
     # we found the csv folder, now get the csv dir
-    cwd += temp + "\\"
+    cwd += temp + "/"
     temp = os.listdir(cwd)
     csv_dict = dict()
     for name in temp:
@@ -661,7 +725,7 @@ def save_df_to_csv(df, folder_name, fname, show_df=False):
     """
     if show_df:
         print(f"DEBUG df:\n{df}")
-    dir_ = set_dir427() + f"\\output\\{folder_name}\\"
+    dir_ = set_dir427() + f"/output/{folder_name}/"
     mkdir_p(dir_)  # creates output\<folder_name> folder if it doesn't exist
     dir_ += fname + ".csv"
     df.to_csv(dir_, sep=",", quotechar='"')  # save to csv file
