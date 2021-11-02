@@ -9,7 +9,8 @@ import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
 from utility427.helper427 import set_dir427
 from utility427.math427 import step_funct, A2P, np
-from utility427.Sierpinski427 import p2ten, p_ary
+from utility427.plt427 import make_level_masks
+from utility427.Sierpinski427 import p2ten, p_ary, make_SierpinskiGraph427
 
 
 def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
@@ -181,7 +182,10 @@ def CCS(counts_me, regType, p, n, seed=0, analytic_comp=False):
         CCS_arr[s,0,l-1]: CCS of means at sample s for level l (f"lv{l}{'-'}{l+1}") for current agent
         CCS_arr[s,1,l-1]: CCS of stds at sample s for level l (f"lv{l}{'-'}{l+1}") for current agent
     """
-    _, masks = load_Sier(regType, p, n)
+    try:
+        _, masks = load_Sier(regType, p, n)
+    except OSError:  # generate on the fly
+        masks = make_level_masks(make_SierpinskiGraph427(p, n, norm = True, regType = regType))
     if analytic_comp:  # assume counts_me is transition prob matrix
         Ps_me = counts_me[np.newaxis, ...]  # since it's analytic, there is no sample (=1)
     else:  # ↓ convert counts_me into transition prob matrix
@@ -249,7 +253,10 @@ def CCPS(counts_me, regType, p, n, ccps_type=1, analytic_comp=False, scale=1):
             learned graph is losing community structure faster at lower level as beta decreases
     - scale (int): ccps_type=2 only; 1 -> mean() 2-> divide sum by num of real edges in groud truth
     """
-    A, _ = load_Sier(regType, p, n)
+    try:
+        A, _ = load_Sier(regType, p, n)
+    except OSError:  # generate on the fly
+        A = make_SierpinskiGraph427(p, n, norm = True, regType = regType)["A"]
     A[A>0] = 1  # adjacency matrix of ground truth
     masks = make_masks(regType, p, n, A.astype(int), ccps_type)
     if analytic_comp:  # assume counts_me is transition prob matrix

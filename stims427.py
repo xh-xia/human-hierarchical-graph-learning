@@ -98,20 +98,25 @@ def make_interspersed_walks(A, walk_length, regType=3):  # np.arr
     5x244 RW + 5x56(2x28) = 1500 nodes RW + Hamiltonian Walk (regType=1)
     5x246 RW + 5x54(2x27) = 1500 nodes RW + Hamiltonian Walk (regType=0,3)
 
+    2021.10.28
+    700 RW + 8x72 RW + 8x28 HT = 1500 nodes RW + Hamiltonian Walk (regType=1)
+    700 RW + 8x73 RW + 8x27 HT = 1500 nodes RW + Hamiltonian Walk (regType=0,3)
+
     Return
     ------
     - walk (np.arr): walk sequence (essentially a list of nodes)
     - isHamiltonian_arr (np.arr): Hamiltonian indicator arr (dtype=int)
     """
-    isHamiltonian = True
-    len_RW = 244 if regType == 1 else 246
-    len_HT = 56 if regType == 1 else 54
+    len_RW = 72 if regType == 1 else 73
+    len_HT = 28 if regType == 1 else 27
     walk = np.zeros(walk_length, dtype=int)
     isHamiltonian_arr = np.zeros(walk_length, dtype=int)
-    walk[:len_RW] = random_walk(A, len_RW)  # start at random
-    i = len_RW  # current index
+    # first start with RW
+    isHamiltonian = True
+    walk[: (len_RW + 700)] = random_walk(A, len_RW + 700)  # start at random
+    i = len_RW + 700  # current index
     while i != walk_length:
-        if isHamiltonian:
+        if isHamiltonian:  # 1 cycle of HT walk
             walk[i - 1 : i + len_HT] = Hamiltonian_walk(
                 len_HT + 1, start_node=walk[i - 1], regType=regType
             )
@@ -119,7 +124,7 @@ def make_interspersed_walks(A, walk_length, regType=3):  # np.arr
             isHamiltonian = False
             i += len_HT
             continue
-        else:
+        else:  # 1 section of RW
             walk[i - 1 : i + len_RW] = random_walk(A, len_RW + 1, start_node=walk[i - 1])
             isHamiltonian_arr[i : i + len_RW] = 0
             isHamiltonian = True

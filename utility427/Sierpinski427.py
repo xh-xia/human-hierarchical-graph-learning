@@ -441,3 +441,30 @@ def make_SierpinskiGraph427(p, n, norm=False, regType=0, use_set=False):
     if norm:  # if true, we normalize the nparr
         A = W_norm(A)
     return dict(A=A, edgeList=edgeList, lvList=lvList, n=n)
+
+
+def W_CG(W, regType, p, n):
+    """level 1 coarse-grains transition matrix by summing up each level-1 community and divide by p
+    Args
+    ----
+    - W (np.arr): transition prob matrix (not adjacency matrix)
+    - regType (int): regularization type, this affects the nodes to be summed up
+        currently only regType=3 is implemented
+    - p (int): base in Sierpiński family parameterization
+    - n (int): power in Sierpiński family parameterization
+    """
+    N = W.shape[0]
+    N2 = round(p ** (n - 1))  # number of nodes in coarse-grained Sierpiński
+    if regType == 1:  # one-node regType
+        N2 += 1
+    elif regType == 2:  # one-community regType
+        N2 += round(p ** (n - 2))
+    renormed = np.zeros((N2, N2), dtype=float)
+    if regType in [3]:
+        for i in range(N2):  # self-loop (w/in community) included; assume undirected
+            for j in range(i, N2):
+                renormed[i, j] = np.sum(W[p * i : p * (i + 1), p * j : p * (j + 1)]) / p
+                renormed[j, i] = np.sum(W[p * i : p * (i + 1), p * j : p * (j + 1)]) / p
+        return renormed
+    else:
+        raise NotImplementedError(f"regType={regType} is not implemented for coarse-graining")
