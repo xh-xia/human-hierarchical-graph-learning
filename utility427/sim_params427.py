@@ -20,6 +20,37 @@ from math427 import get_factors
 sys.path.pop(0)  # remove script dir from sys.path
 
 
+def make_beta_mat(N, n, binned=False, b=10, seed=427):
+    """
+    it uses its own seed for uniform sampling; separated from the simulation
+
+    Return
+    ------
+    - beta_mat (2D nparr): dim=(N, n+1); for i = 0,...,N-1 | j = 0,...,n-1:
+        beta_mat[i,j]: actual beta for agent j centered at beta=beta_mat[i,-1]
+        each beta_mat[i,j] is a point uniformly sampled from logspace of beta
+        the center of this logspace is at beta=beta_mat[i,-1]
+    """
+    beta_mat = np.zeros((N, n + 1), dtype=float)
+    # first generate log-uniformly spaced beta_arrs of len=N from 10**-3 to 10**1
+    # aim to cover both end points but due to floating point error the last point may not be 10**1
+    t0, t1 = -3, 1
+    dt = (t1 - t0 ) / (N - 1)  # (linearly) evenly spaced
+    if not binned:
+        for i in range(N):
+            beta_mat[i, :] = b ** (t0 + dt * i)
+    else:
+        RNG = np.random.default_rng(seed=seed)
+        rand01 = RNG.random((N, n))
+        t0 -= dt  # extend the start and end with two more points
+        for i in range(N):
+            beta_mat[i, -1] = b ** (t0 + dt * (i + 1))
+            aa = t0 + dt * (i + 1 - 0.5)
+            bb = t0 + dt * (i + 1 + 0.5)
+            beta_mat[i, :-1] = b ** ((bb - aa) * rand01[i, :] + aa)
+    return beta_mat
+
+
 def make_sim_params(params):
     """set up parameters for simulations
 
@@ -47,7 +78,8 @@ def make_sim_params(params):
     ------------
     - params["pd"] (iter): reg, n, p tuple iterator
     - params["int_max"] (int32): some constant, in this case 2147483647 for int (int32 really)
-    - params["beta_arrs"] (list of np.arr):
+    - params["beta_acts"] (list of 2D np.arr): actual beta list
+    - params["beta_arrs"] (list of 1D np.arr): group beta list
      entry in the list e.g., [0.01, 0.1, 1,| -1, -2, -3]
                             (constant case)|(variable case)
         1D arr of beta values (constant beta case)
@@ -76,13 +108,16 @@ def make_sim_params(params):
     params["int_max"] = np.iinfo(int).max
 
     # beta and beta classes (they have the same length)
-    params["beta_arrs"] = [None] * len(params["var_betas"])  # initialize beta list
+    params["beta_arrs"] = [None] * len(params["var_betas"])  # initialize group beta list
+    params["beta_acts"] = [None] * len(params["var_betas"])  # initialize actual beta list
     params["beta_classes"] = [None] * len(params["var_betas"])  # initialize beta class list
     for i in range(len(params["var_betas"])):
         # for each item in params["var_betas"],
         # it has a corresponding item in beta_arrs and beta_classes
-        params["beta_arrs"][i] = 10 ** np.linspace(-3, 1, params["n_beta_constcase"], endpoint=True)
-        params["beta_classes"][i] = "constant"
+        beta_mat = make_beta_mat(params["n_beta_constcase"], params["n_agents"], binned=True)
+        params["beta_arrs"][i] = beta_mat[:, -1]  # group beta
+        params["beta_acts"][i] = beta_mat[:, :-1]  # actual beta
+        params["beta_classes"][i] = "constant_binned"
         if isinstance(params["var_betas"][i], bool) and params["var_betas"][i]:
             params["beta_classes"][i] = "step_max_beta"
             params["beta_arrs"][i] = np.concatenate([params["beta_arrs"][i], [-427]], axis=None)

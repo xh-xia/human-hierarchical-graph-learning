@@ -24,8 +24,8 @@ CCS_stat (dict): 3 keys each corresponding to one statistic of CCS:
 value[(regType,p,n)] (3D nparr): "[slice]: meaning"
     s stands for the s-th sample in counts tensor defined in RW_Graph_Class.py
     (2nd dim specifies type of value in the cell; 3rd dim corresponds to different beta)
-    [s,0,:]: beta (like index column for the cells)
-    [s,1,:]: group size
+    [s,0,:]: group beta
+    [s,1,:]: group size (each one in the group has different beta and aggregated via statistics)
     [s,2,:]: steps_sample (time stamps at the time of sampling = walk length)
     [s,3,:]: stat of the group having that beta for CCS at level 1
     ...
@@ -35,9 +35,9 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
 """
 
 is_operation = True  # whether CCS_compute is done as @operation in signac
-sub_folder_name = "CCS,CCPS,CCTS" # folder inside output folder to store all CCS_stat
+sub_folder_name = "reg_n_p_binned_beta" # folder inside output folder to store all CCS_stat
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
-CCS_key = "CCPS2"  # options: CCS, CCPS, CCPS2
+CCS_key = "CCS"  # options: CCS, CCPS, CCPS2
 
 KEYS = ["mean", "ste", "median", "ste_median"]  # keys of CCS_stat
 if save_raw:
@@ -87,7 +87,7 @@ def main_CCS_stat(CCS_key):
             for job in project.find_jobs(job_criteria):
                 counter += 1
                 print_progress(counter)
-                nparr[:, 0, job.sp.beta_idx] = job.sp.beta
+                nparr[:, 0, job.sp.beta_idx] = job.sp.beta_grp  # not the actual beta used in sim
                 nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
                 with job.data:
                     nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]

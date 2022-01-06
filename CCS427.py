@@ -52,7 +52,7 @@ def main_Sierpinski427():
 
     # add more parameters into p
     p["colors"] = colors_selector(str="5-class Greens")
-    p["beta_arr"] = np.geomspace(0.0001, 10, 400)  # for analytical curve only
+    p["beta_arr"] = np.geomspace(4e-4, 2e1, 400)  # for analytical curve only
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
@@ -637,7 +637,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     """
     # set up beta range (analytical) for plot
     if is_log:
-        x_range = (min(x) * 1.00, max(x) * 1.25)
+        x_range = (min(x) * 1.00, max(x) * 1.00)
         x_scale = 10  # base used for get_violin_pw(); same as when beta was first initialized
     else:
         delta = (max(x) - min(x)) * 0.05
@@ -660,7 +660,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         CCS_type_slice = 1
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
     xlabel = r"Shuffling Parameter $\beta$"
-    ylabel = "Ratio of Means of Two Consecutive Levels"
+    ylabel = "CCS"
     if CCS_plot_type == "sum":
         ylabel = "Sum of CCS Across Levels"
     if regType in [0, 1, 2, 3]:
@@ -690,13 +690,13 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
             if noise["mean"][params][spl, 0, i] > 0:
                 bs = i + 1
                 break
-        if bs != -1:
-            # import warnings  # may want to comment the warnings out since it gets verbose
-            # msg = "only <noise[\"mean\"][params][spl, 0, -1]> can be < 0\n"
-            # msg += f"currently <noise[\"mean\"][params][spl, 0, {bs}:]> are all < 0\n"
-            # msg += "using last val instead"
-            # warnings.warn(msg)
-            bs = -1  # force use last val
+        # if bs != -1:  # not sure why such condition; it's varb case, currently unused anyway
+        #     import warnings  # may want to comment the warnings out since it gets verbose
+        #     msg = "only <noise[\"mean\"][params][spl, 0, -1]> can be < 0\n"
+        #     msg += f"currently <noise[\"mean\"][params][spl, 0, {bs}:]> are all < 0\n"
+        #     msg += "using last val instead"
+        #     warnings.warn(msg)
+        #     bs = -1  # force use last val
         # bs1 = slice(bs, None)  # if no <0 beta, slice(bs, None) = [0:], which is >0 beta
         bs2 = slice(0, d + bs)  # get >0 beta slice object
 
@@ -788,9 +788,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         xmaxs[i] = x[np.argmax(CCS_arr[:, CCS_type_slice, i])]
         ymaxs[i] = np.max(CCS_arr[:, CCS_type_slice, i])
         # texts[i] = f"({xmaxs[i]:.3f},{ymaxs[i]:.3f})"  # show both beta and CCS
-        texts[i] = f"{xmaxs[i]:.3f}"  # show only beta
+        texts[i] = f"β={xmaxs[i]:.3f}"  # show only beta
         kw_text.update(dict(color=cmap(i), xy=(xmaxs[i], ymaxs[i])))
-        kw_text.update(dict(xytext=(0.85 - i * 0.2, 0.05)))
+        kw_text.update(dict(xytext=(0.85 - i * 0.2, 0.85)))
         ax.annotate(texts[i], **kw_text)
 
     def temp_b2():  # annotate total CCS plot with maxima

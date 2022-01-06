@@ -1,5 +1,5 @@
 """
-CCS, CCSC
+CCS, CCSC (coarse-graining); it also removes some commented codes in CCS427.py
 
 Created: Monday, ‎November ‎1, ‎2021, ‏‎9:52:16 AM (EDT)
 @author: Xiaohuan (Pixel) X.
@@ -155,8 +155,9 @@ def make_A_hat_beta(A, beta, CG_lv=0, tup=None):
 
     Return
     ------
-    - A_hat (2D nparr, shape = np.shape (A)):
+    - A_hat (2D nparr):
         assuming infinite walks on A, this is the resulting A_hat learned based on beta
+        assume the graph is connected, meaning beta -> 0 A_hat = 1/n * np.ones((n, n))
         A_hat = (1-e^(-β)) * A * (I - (e^(-β))A)^(-1)
         undirected, weighted 3-regular graph with:
         lv hierarchies:
@@ -166,6 +167,8 @@ def make_A_hat_beta(A, beta, CG_lv=0, tup=None):
         level lv: 1 community of (3) level-lv-1 unit (coarsest level)
     """
     n = np.shape(A)[0]  # # of rows, but assuming symmetric, thus also cols (=nodes)
+    if np.isclose(0, beta, rtol=0, atol=1e-32):  # abs(a - b) <= (atol + rtol * abs(b))
+        return 1/n * np.ones((n, n), dtype=float)
     A_ = W_norm(A)
     A_hat = (1 - np.exp(-beta)) * A_ @ np.linalg.inv(np.eye(n) - np.exp(-beta) * A_)
     for i in range(CG_lv):

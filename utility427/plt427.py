@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import Normalize, LinearSegmentedColormap
 from matplotlib.gridspec import GridSpec  # for subplots placement manipulation
 from matplotlib.lines import Line2D  # for median legend in violin plots
+import matplotlib.ticker as ticker  # for xticks/yticks
 
 import sys, os, inspect
 temp_cwd = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))

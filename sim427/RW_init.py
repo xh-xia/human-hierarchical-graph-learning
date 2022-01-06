@@ -48,8 +48,8 @@ for i in range(len(params["beta_classes"])):
     for regType, p, n in params["pd"]:
         fname = "output/npy_files/"
         fname += f"Sierpinski(regType={regType:d},p={p:d},n={n:d}).npy"
-        for beta_idx in range(len(params["beta_arrs"][i])):
-            for agentID in params["range_agents"]:
+        for beta_idx in range(len(params["beta_arrs"][i])):  # loop over groups of beta: group beta
+            for agentID in params["range_agents"]:  # loop over each group: actual beta
                 seed = RNG.integers(params["int_max"])
                 project.open_job(
                     {
@@ -63,8 +63,9 @@ for i in range(len(params["beta_classes"])):
                         "regType": regType,
                         "p": p,
                         "n": n,
-                        "beta": params["beta_arrs"][i][beta_idx],
-                        "beta_idx": beta_idx,
+                        "beta_grp": params["beta_arrs"][i][beta_idx],  # beta shared in grp
+                        "beta": params["beta_acts"][i][beta_idx, agentID],  # beta used in sim
+                        "beta_idx": beta_idx,  # group beta idx; actual beta idx = agentID
                         "var_beta": params["var_betas"][i],
                         "max_betas": get_max_betas(max_beta_dict, regType, p, n, reverse=reverse),
                     }
