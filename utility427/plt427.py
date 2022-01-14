@@ -190,7 +190,7 @@ def make_level_masks(GTDict):
     masks = dict()
     # initialize mask for all levels (including -1, which is undefined lv)
     for l in set(GTDict["lvList"]):
-        masks[f"lv{l}"] = np.zeros_like(GTDict["A"])
+        masks[f"lv{l}"] = np.zeros_like(GTDict["A"], dtype=int)
     for k, (i, j) in enumerate(GTDict["edgeList"]):
         masks[f"lv{GTDict['lvList'][k]}"][i, j] = 1
         masks[f"lv{GTDict['lvList'][k]}"][j, i] = 1  # undirected graph

@@ -16,6 +16,7 @@ from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_v
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params
+from utility427.CCS_num import CCS_ep  # newly added on 2022.1.13
 
 
 def main_Sierpinski427():
@@ -46,8 +47,7 @@ def main_Sierpinski427():
     # can be whatever as long as it (was once defined in params.json) was run in sim427
     # otherwise will be error in load_CCS_stat(), which loads results generated from sim427
     # p["key_class"] = "max_beta"
-    # p["key_class"] = "max_beta_hi2lo"
-    make_sim_params(p)
+    p = make_sim_params(p, binned=False)
     p.update(get_params(fname="input\\params_CCS427", default_dir=False))  # get parameters for CCS427.py
 
     # add more parameters into p
@@ -56,9 +56,9 @@ def main_Sierpinski427():
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
-    # hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
+    hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
     # hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
-    hierDict['r'] = [[0,1,3],[3],[3]]
+    # hierDict['r'] = [[0,1,3],[3],[3]]
     kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
     kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
@@ -105,7 +105,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
             DD.update(dd)
 
         kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
-        regCCS = 1 if len(key) > 1 else 2  # always do 2 CCS rows if len(key) == 1
+        regCCS = 3 if len(key) > 1 else 2  # always do 2 CCS rows if len(key) == 1
         kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=regCCS))
         kw_plot.update(dict(CCS_plot_type=CCS_plot_type, sub_folder_name=sub_fo_name))
         kw_plot.update(dict(raw_method=raw_method))
@@ -116,6 +116,9 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
                 kw_plot.update(dict(spl=spl))
                 plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
         elif regCCS == 2:  # no need for spl since it will be forced to be [0, -1]
+            plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
+        elif regCCS == 3:
+            kw_plot.update(dict(spl=slice(0, None)))
             plot_Graph_CCS(DD, beta_arr, key, **kw_plot)
         else:
             raise NotImplementedError(f"<regCCS>={regCCS} is not implemented")
@@ -145,6 +148,7 @@ def plot_side(tup, beta_arr):
     dd[tup]["CCS_arr"] = CCS_analysis(
         dd[tup]["GTDict"], beta_arr, dd[tup]["A_hat_list"], analytic=False
     )
+    # dd[tup]["CCS_arr_ep"] = CCS_ep(dd[tup]["GTDict"], dd[tup]["A_hat_list"], T=1500)
     Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
     Sier.Layout_Sierpinski427()
     dd[tup]["Sier"] = Sier
@@ -382,6 +386,7 @@ def plot_Graph_CCS(
             or
             hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
         2: display 3 rows: 1 graph 2 CCS; no varb implemented for this yet; spl is forced to be list
+        3: display 5 rows of CCS with no graphs; all of regType=3 since that's the exp setup
     - sub_folder_name (str):
         the name of the folder in f"output/{whatnot}/" to store the plots
         where <whatnot> is defined in saveNclose427()
@@ -398,9 +403,12 @@ def plot_Graph_CCS(
     DD_keys = sorted(DD.keys(), reverse=False)  # ascending (default)
     if regCCS==2:  # force spl to be a len-2 list [0, -1]
         spl = [0, -1]
+    elif regCCS==3:
+        spl = list(range(0, 5))  # 5 walk sizes
+        DD_keys = [k for k in DD_keys if k[0]==3]  # we only need regType=3
     if CCS_stat is not None and regCCS!=2:
         # generate variable beta version if there is negative beta (just need to check last item)
-        if CCS_stat["mean"][DD_keys[0]][spl, 0, -1] < 0:  # 2nd dim idx=0 is beta dim
+        if CCS_stat["mean"][DD_keys[0]][spl[0], 0, -1] < 0:  # 2nd dim idx=0 is beta dim
             varb = True
 
     if colors is None:
@@ -411,6 +419,8 @@ def plot_Graph_CCS(
             fig2 = plt.figure(figsize=[20, 18])  # initialize
     elif regCCS==2:
         fig = plt.figure(figsize=[20, 13.5])  # initialize
+    elif regCCS==3:
+        fig = plt.figure(figsize=[20, 22])  # initialize
     else:
         fig = plt.figure(figsize=[20, 9])  # initialize
         if varb:
@@ -426,6 +436,9 @@ def plot_Graph_CCS(
         height_ratios = [1, hf, ds, 1] * 3 + [1, hf, ds]
     elif regCCS==2:  # 3 rows
         height_ratios = [1, hf, ds, 1] * 2 + [1, hf, ds]
+    elif regCCS==3:  # 5 rows
+        height_ratios = [1, hf, ds, 1] * 4 + [1, hf, ds]
+
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
     kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
     gs = GridSpec(**kw1)
@@ -437,11 +450,11 @@ def plot_Graph_CCS(
         axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 3, [None] * 3
         if varb:
             axes2["Graph"], axes2["CCS"], axes2["Colorbar"] = [None] * 3, [None] * 3, [None] * 3
-    elif regCCS==1:
-        for regType in [0, 1, 2, 3]:
-            axes[f"CCS_reg{regType}"] = [None] * 3
+    elif regCCS in [1, 3]:
+        for row in range(4 + (regCCS == 3)):
+            axes[f"CCS_row{row}"] = [None] * 3
             if varb:
-                axes2[f"CCS_reg{regType}"] = [None] * 3
+                axes2[f"CCS_row{row}"] = [None] * 3
     elif regCCS==2:
         axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 6, [None] * 3
 
@@ -449,9 +462,13 @@ def plot_Graph_CCS(
     if CCS_stat is not None:
         # both group size and walk length are the same across all beta
         if regCCS!=2:
-            n_agents = round(CCS_stat["mean"][DD_keys[0]][spl, 1, 0])
-            n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
-            fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
+            if regCCS in [0, 1]:  # spl (int)
+                n_agents = round(CCS_stat["mean"][DD_keys[0]][spl, 1, 0])
+                n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
+                fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
+            elif regCCS == 3:  # spl (list)
+                n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
+                fname += f"_{n_agents}_allsteps_{err_type}_{CCS_type}"
         else:
             n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
             n_steps1 = round(CCS_stat["mean"][DD_keys[0]][spl[0], 2, 0])
@@ -460,15 +477,15 @@ def plot_Graph_CCS(
             fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
 
     if regCCS==1:  # assuming DD_keys has 12 entries
-        for i in range(3):
-            for regType in [0, 1, 2, 3]:
+        for i in range(3):  # col
+            for regType in [0, 1, 2, 3]:  # row
                 temp = gs[regType * 4 : regType * 4 + 3, i * 3 + 1]
-                axes[f"CCS_reg{regType}"][i] = fig.add_subplot(temp)
+                axes[f"CCS_row{regType}"][i] = fig.add_subplot(temp)
                 if varb:
-                    axes2[f"CCS_reg{regType}"][i] = fig2.add_subplot(temp)
+                    axes2[f"CCS_row{regType}"][i] = fig2.add_subplot(temp)
                 params = DD_keys[i + 3 * regType]
 
-                kw2 = dict(ax=axes[f"CCS_reg{regType}"][i], x=beta_arr)
+                kw2 = dict(ax=axes[f"CCS_row{regType}"][i], x=beta_arr)
                 kw2.update(dict(CCS_plot_type=CCS_plot_type))
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
                 kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
@@ -476,7 +493,26 @@ def plot_Graph_CCS(
                 kw2.update(dict(raw_method=raw_method))
                 ax_CCS(**kw2)
                 if varb:
-                    kw2.update(dict(ax=axes2[f"CCS_reg{regType}"][i], varb=varb))
+                    kw2.update(dict(ax=axes2[f"CCS_row{regType}"][i], varb=varb))
+                    ax_CCS(**kw2)
+    elif regCCS==3:  # assuming DD_keys has 3 entries (-> 3 col)
+        for i in range(3):  # col
+            for row in spl:  # row
+                temp = gs[row * 4 : row * 4 + 3, i * 3 + 1]
+                axes[f"CCS_row{row}"][i] = fig.add_subplot(temp)
+                if varb:
+                    axes2[f"CCS_row{row}"][i] = fig2.add_subplot(temp)
+                params = DD_keys[i]  # unlike regCCS==1, 1 DD_keys per col
+
+                kw2 = dict(ax=axes[f"CCS_row{row}"][i], x=beta_arr)
+                kw2.update(dict(CCS_plot_type=CCS_plot_type))
+                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
+                kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
+                kw2.update(dict(spl=row, is_log=True, colors=colors, last_row=row==spl[-1]))
+                kw2.update(dict(raw_method=raw_method, show_legend=i == 1))
+                ax_CCS(**kw2)
+                if varb:
+                    kw2.update(dict(ax=axes2[f"CCS_row{regType}"][i], varb=varb))
                     ax_CCS(**kw2)
     elif regCCS in [0, 2]:
         lr = (regCCS==0)  # True if regCCS is 0, meaning first CCS row is the last row
@@ -514,12 +550,9 @@ def plot_Graph_CCS(
                 kw4.update(dict(spl=spl_current, show_legend=i == 1, last_row=True))
                 ax_CCS(**kw4)
     # panel label list
-    if regCCS == 0:
-        text_labels = ["A", "B"]
-    elif regCCS == 1:
-        text_labels = ["A", "B", "C", "D"]
-    elif regCCS == 2:
-        text_labels = ["A", "B", "C"]
+    regCCS2row = {0:2, 1:4, 2:3, 3:5}
+    if regCCS in regCCS2row.keys():
+        text_labels = [chr(ord("A") + i) for i in range(regCCS2row[regCCS])]
     else:
         raise NotImplementedError(f"<regCCS>={regCCS} is not implemented")
     for i in range(len(text_labels)):

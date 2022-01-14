@@ -24,7 +24,7 @@ reg_n_p: 20 cases of combination from:
     hierDict["reg_p"] = [[0, 1, 2, 3], [3, 4, 5], [3]] = 8 (excluding those in reg_n)
 implemented variable beta case: with num of changes = [1, 2, 3, 4, 5, 6, 8, 10, 12]
 """
-params = make_sim_params(get_params())  # load params.json as dict, use it to create sim params
+params = make_sim_params(get_params(), binned=False)  # load params.json as dict, use it to create sim params
 max_beta_dict = get_params(fname="params_max_beta")  # from hi to low
 
 reverse = True  # default is reversed, meaning lo2hi

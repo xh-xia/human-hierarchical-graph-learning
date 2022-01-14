@@ -35,7 +35,7 @@ value[(regType,p,n)] (3D nparr): "[slice]: meaning"
 """
 
 is_operation = True  # whether CCS_compute is done as @operation in signac
-sub_folder_name = "reg_n_p_binned_beta" # folder inside output folder to store all CCS_stat
+sub_folder_name = get_params("params")["key_class"] # folder inside output folder to store all CCS_stat
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
 CCS_key = "CCS"  # options: CCS, CCPS, CCPS2
 
@@ -44,9 +44,9 @@ if save_raw:
     KEYS += ["raw"]
 
 
-def print_progress(counter, tot=28000):
+def print_progress(counter):
     if counter % 1000 == 0:
-        print(f"Progresss: {counter}/{tot}")
+        print(f"Progresss: {counter}")
 
 
 def main_CCS_stat(CCS_key):
@@ -72,8 +72,8 @@ def main_CCS_stat(CCS_key):
     for i in range(len(params["beta_classes"])):
         counter = 0  # to report sub-progress
         for regType, p, n in params["pd"]:
-            if regType == 2:  # this is never used in CCS, CCPS, or CCTS
-                continue  # skip the rest and go back to the current loop of regType, p, n
+            # if regType == 2:  # this is never used in CCS, CCPS, or CCTS
+            #     continue  # skip the rest and go back to the current loop of regType, p, n
             job_criteria = {
                 "key_class": params["key_class"],
                 "beta_class": params["beta_classes"][i],

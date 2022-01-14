@@ -16,6 +16,7 @@ from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_v
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427, W_CG
 from utility427.sim_params427 import make_sim_params
+from utility427.CCS_num import CCS_ep  # newly added on 2022.1.13
 from sim427.RW_Graph_Class import CCS, CCPS, make_masks
 
 def CCS_main():

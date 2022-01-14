@@ -22,11 +22,12 @@ def ECCS_main():
     cwd = set_dir427()  # script dir
     colors = colors_selector(str="5-class Greens")
 
-    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[3, 4, 5])
+    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[None])
     kwargs = dict(cwd=cwd + "/input/empirical_data/", )
     for nback_idx in [0, 1]:  # 0 -> direct fit; 1 -> MLE
         for gof_thres in [0.80, 0.85, 0.90, 0.95]:
-            get_process_beta_2src(nback_idx=nback_idx, gof_thres=gof_thres, **kwargs)
+            # get_process_beta_2src(nback_idx=nback_idx, gof_thres=gof_thres, **kwargs)
+            pass
 
 
     beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
@@ -113,8 +114,8 @@ def plot_hists_ECCS(
         kw_axl.update(dict(transform=axes["labels"][i].transAxes))
         axes["labels"][i].text(label_rpos[i], 1.09, f"{text_labels[i]}", **kw_axl)
 
-    t_test_ECCS(MEM, ccs_lv=2)
     ECCS_arr, num_exc = make_ECCS_arr(MEM, (1e-4, 999), (-5, 10))
+    t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2)
     # print(num_exc, ECCS_arr)
     for i in range(2):
         kw_ECCS = dict(ax=axes["CCS"][i], x=ECCS_arr[:, 0], CCS_arrs=None, params=params)
@@ -125,24 +126,23 @@ def plot_hists_ECCS(
     saveNclose427(fig, fname + " (log)"*is_log, dpi=dpi, sub_folder_name=sub_folder_name)
 
 
-def t_test_ECCS(MEM, ccs_lv=2):
+def t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2):
     """
     greater (one-sided) one-sample t-test per ccs_lv
     H0: ECCS = 1
     Ha: ECCS > 1
-    """
     xlims = [(4.5e-3, 2), (2e-3, 2e-1)]
-    # xlims = [(4.5e-3, 2), (4.5e-3, 2e-1)]
+    xlims = [(4.5e-3, 2), (4.5e-3, 2e-1)]
     ylims = [(-5, 10), (-5, 10)]
+    """
     kwargs = dict(axis=0, nan_policy="raise", alternative="greater")
     kwargs2 = dict(alternative="greater")
     for i in range(ccs_lv):
-        ECCS_arr, num_exc = make_ECCS_arr(MEM, xlims[i], ylims[i])
         n_sample = ECCS_arr.shape[0]  # sample size
         the_mean = np.mean(ECCS_arr[:, i + 1])
         result = stats.ttest_1samp(ECCS_arr[:, i + 1], popmean=1, **kwargs)
         result2 = stats.wilcoxon(ECCS_arr[:, i + 1], y = [1] * n_sample, **kwargs2)
-        print(f"ECCS lv={i + 1} | mean = {the_mean:.2f} | n={n_sample}")
+        print(f"ECCS lv={i + 1} | mean = {the_mean:.2f} | n={n_sample} | removed {num_exc} outliers")
         print(f"(t-test) pval = {result.pvalue:.4f}")
         print(f"(Wilcoxon) pval = {result2.pvalue:.4f}")
 
@@ -588,7 +588,6 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
 
     # visualization & analyses
     txt_beta_arr = "Direct-Fit" if nback_idx == 0 else "MLE"
-    n_spearmanr = beta_arr_filt.shape[0]
     spearmanr = stats.spearmanr(beta_arr_filt, axis=0)
     ander_sier = stats.anderson(beta_arr_filt[:, 0], dist="norm")
     ander_nback = stats.anderson(beta_arr_filt[:, 1], dist="norm")
@@ -600,13 +599,25 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     ax1 = fig.add_subplot(1, 2, 1)
     ax2 = fig.add_subplot(1, 2, 2)
     axes = [ax1, ax2]
+    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax1.transAxes)
+    temp_median1 = np.median(beta_arr[:, 0])
+    temp_median2 = np.median(beta_arr[:, 1])
+    temp_mean1 = np.mean(beta_arr_filt[:, 0])
+    temp_mean2 = np.mean(beta_arr_filt[:, 1])
+    temp_median3 = np.median(beta_arr_filt[:, 0])
+    temp_median4 = np.median(beta_arr_filt[:, 1])
+
     ax1.scatter(beta_arr[:, 1], beta_arr[:, 0])
     ax1.set_title(r"$\beta$: network vs. n-back", fontsize=17)
+    ax1.text(0.8, 0.90, f"$n={beta_arr.shape[0]:d}$", **styles_txt)
+    ax1.text(0.6, 0.85, f"median={temp_median1:.3f} (network) | {temp_median2:.3f} (n-back)", **styles_txt)
     ax2.scatter(beta_arr_filt[:, 1], beta_arr_filt[:, 0])
     ax2.set_title(fr"$\beta$: network vs. n-back ({txt_beta_arr}; gof$\geq${gof_thres:.2f})", fontsize=17)
-    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax2.transAxes)
+    styles_txt.update(dict(transform=ax2.transAxes))
     ax2.text(0.8, 0.95, f"$r_s={spearmanr.correlation:.3f}$, $p={spearmanr.pvalue:.3f}$", **styles_txt)
-    ax2.text(0.8, 0.90, f"$n={n_spearmanr:d}$", **styles_txt)
+    ax2.text(0.8, 0.90, f"$n={beta_arr_filt.shape[0]:d}$", **styles_txt)
+    ax2.text(0.6, 0.85, f"mean={temp_mean1:.3f} (network) | {temp_mean2:.3f} (n-back)", **styles_txt)
+    ax2.text(0.6, 0.80, f"median={temp_median3:.3f} (network) | {temp_median4:.3f} (n-back)", **styles_txt)
 
     for ax in axes:
         ax.set_xlabel(r"n-back $\beta$", fontsize=11)

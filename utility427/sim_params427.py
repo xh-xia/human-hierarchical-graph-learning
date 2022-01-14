@@ -38,7 +38,7 @@ def make_beta_mat(N, n, binned=False, b=10, seed=427):
     dt = (t1 - t0 ) / (N - 1)  # (linearly) evenly spaced
     if not binned:
         for i in range(N):
-            beta_mat[i, :] = b ** (t0 + dt * i)
+            beta_mat[i, :] = b ** (t0 + dt * i)  # same beta for group i; -1 is redundant obviously
     else:
         RNG = np.random.default_rng(seed=seed)
         rand01 = RNG.random((N, n))
@@ -51,7 +51,7 @@ def make_beta_mat(N, n, binned=False, b=10, seed=427):
     return beta_mat
 
 
-def make_sim_params(params):
+def make_sim_params(params, binned=False):
     """set up parameters for simulations
 
     Arg - params (dict)
@@ -114,10 +114,10 @@ def make_sim_params(params):
     for i in range(len(params["var_betas"])):
         # for each item in params["var_betas"],
         # it has a corresponding item in beta_arrs and beta_classes
-        beta_mat = make_beta_mat(params["n_beta_constcase"], params["n_agents"], binned=True)
+        beta_mat = make_beta_mat(params["n_beta_constcase"], params["n_agents"], binned=binned)
         params["beta_arrs"][i] = beta_mat[:, -1]  # group beta
         params["beta_acts"][i] = beta_mat[:, :-1]  # actual beta
-        params["beta_classes"][i] = "constant_binned"
+        params["beta_classes"][i] = "constant_binned" if binned else "constant_unbinned"
         if isinstance(params["var_betas"][i], bool) and params["var_betas"][i]:
             params["beta_classes"][i] = "step_max_beta"
             params["beta_arrs"][i] = np.concatenate([params["beta_arrs"][i], [-427]], axis=None)
