@@ -39,7 +39,7 @@ sub_folder_name = get_params("params")["key_class"] # folder inside output folde
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
 CCS_key = "CCS"  # options: CCS, CCPS, CCPS2
 
-KEYS = ["mean", "ste", "median", "ste_median"]  # keys of CCS_stat
+KEYS = ["mean", "ste", "std", "median", "ste_median"]  # keys of CCS_stat
 if save_raw:
     KEYS += ["raw"]
 
@@ -115,6 +115,8 @@ def main_CCS_stat(CCS_key):
 
             nparr[:, 3:, :] = np.nanmean(stat_arr, axis=3)
             CCS_stat["mean"][(regType, p, n)] = nparr.copy()
+            nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3)
+            CCS_stat["std"][(regType, p, n)] = nparr.copy()
             nparr[:, 3:, :] = np.nanstd(stat_arr, axis=3) / np.sqrt(params["n_agents"])
             CCS_stat["ste"][(regType, p, n)] = nparr.copy()
 

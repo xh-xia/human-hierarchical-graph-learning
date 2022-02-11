@@ -15,7 +15,7 @@ from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec,
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_violin_pw  # mpl helpers
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
-from utility427.sim_params427 import make_sim_params
+from utility427.sim_params427 import make_sim_params, make_beta_boundry
 from utility427.CCS_num import CCS_ep  # newly added on 2022.1.13
 
 
@@ -56,17 +56,18 @@ def main_Sierpinski427():
     hierDict = dict()
     # hierDict['n'] = [[0],[3],[3,4,5]]
     # hierDict['p'] = [[3],[3,4,5],[3]]
-    hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
-    # hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
+    # hierDict["reg_n"] = [[0, 1, 2, 3], [3], [3, 4, 5]]
+    hierDict['reg_p'] = [[3],[3,4,5],[3]]
     # hierDict['r'] = [[0,1,3],[3],[3]]
     kw_loop = dict(sub_fo_name=p["sub_fo_name"], CCS_type=p["CCS_type"], key_class=p["key_class"])
     kw_loop.update(dict(n_agents=p["n_agents"], err_type=p["err_type"], hierDict=hierDict))
     kw_loop.update(dict(beta_arr=p["beta_arr"], colors=p["colors"], dpi=p["dpi"]))
     kw_loop.update(dict(raw_method=p["raw_method"], CCS_plot_type=p["CCS_plot_type"]))
+    kw_loop.update(dict(use_ep=p["sim0_or_ep1"]))
 
     # just graph (graphs_singleton)
-    betas = [np.inf, 0.33, 0.70]
-    plot_Graph((3, 3, 3), betas, dpi=300, sub_folder_name="", transparent=True, annotate=None)
+    # betas = [np.inf, 0.33, 0.70]
+    # plot_Graph((3, 3, 3), betas, dpi=300, sub_folder_name="", transparent=True, annotate=None)
     # single-processing | w/o mp in plot_main() ~155 sec
     for beta_class in p["beta_classes"]:
         plot_main(**kw_loop, mp=False)(beta_class)
@@ -77,7 +78,7 @@ def main_Sierpinski427():
 
 @partial_427_decorator
 def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
-              beta_arr, err_type, raw_method, CCS_plot_type, colors, dpi, mp=False):
+              beta_arr, err_type, raw_method, CCS_plot_type, colors, dpi, use_ep, mp=False):
     """this function is I/O bound | suitable for multi-threading
     should be in script dir when this function is run
 
@@ -95,6 +96,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
 
     for key in hierDict.keys():
         kw_main = dict(beta_arr=beta_arr)
+        kw_main["beta_arr2"] = CCS_stat["mean"][(3, 3, 3)][0, 0, :] if use_ep else None
         if mp:
             with ProcessPoolExecutor() as executor:
                 dd_list = executor.map(plot_side(**kw_main), product(*hierDict[key]))
@@ -105,6 +107,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
             DD.update(dd)
 
         kw_plot = dict(CCS_stat=CCS_stat, err_type=err_type, CCS_type=CCS_type)
+        kw_plot.update(dict(beta_arr2=kw_main["beta_arr2"]))
         regCCS = 3 if len(key) > 1 else 2  # always do 2 CCS rows if len(key) == 1
         kw_plot.update(dict(colors=colors, dpi=dpi, regCCS=regCCS))
         kw_plot.update(dict(CCS_plot_type=CCS_plot_type, sub_folder_name=sub_fo_name))
@@ -125,12 +128,13 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
 
 
 @partial_427_decorator
-def plot_side(tup, beta_arr):
+def plot_side(tup, beta_arr, beta_arr2=None):
     """this function is numerical calculation heavy | suitable for multi-processing
 
     Args
     ----
     - tup (tuple): (regType, p, lv), used to create the only key in <dd>
+    - beta_arr, beta_arr2 (nparr): 1st one is for analytical curve, 400 pts, 2nd is scatter, 10 only
 
     Return
     ------
@@ -148,7 +152,14 @@ def plot_side(tup, beta_arr):
     dd[tup]["CCS_arr"] = CCS_analysis(
         dd[tup]["GTDict"], beta_arr, dd[tup]["A_hat_list"], analytic=False
     )
-    # dd[tup]["CCS_arr_ep"] = CCS_ep(dd[tup]["GTDict"], dd[tup]["A_hat_list"], T=1500)
+    if beta_arr2 is None:
+        dd[tup]["CCS_stat_ep"] = None  # plot sim as scatter points
+    else:  # plot numerical approximation as scatter points
+        kw = dict(T=[1500, 3000, 4500, 6000, 7500], mp=False)
+        # kw = dict(T=[500, 1000, 1500, 2000, 3000], mp=False)
+        A_hat_list2 = [make_A_hat_beta(dd[tup]["GTDict"]["A"], beta) for beta in beta_arr2]
+        dd[tup]["CCS_stat_ep"] = CCS_ep(dd[tup]["GTDict"], A_hat_list2, beta_arr2, **kw)
+        print(f"DEBUG CCS_ep 1 tup done: {tup}")
     Sier = make_Sierpinski427(p, lv, x0=[0.0, 0.0], s0=1.0, c=1.0, regType=regType)
     Sier.Layout_Sierpinski427()
     dd[tup]["Sier"] = Sier
@@ -353,7 +364,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
 
 def plot_Graph_CCS(
     DD, beta_arr, key, CCS_stat=None, raw_method=None, spl=-1, CCS_type="mean", err_type="ste",
-    CCS_plot_type="CCS", colors=None, dpi=None, regCCS=0, sub_folder_name=""
+    CCS_plot_type="CCS", colors=None, dpi=None, regCCS=0, sub_folder_name="", beta_arr2=None
 ):
     """It produces both CCS plot and Graph (node-edge graph, not graph graph) plot
 
@@ -487,8 +498,10 @@ def plot_Graph_CCS(
 
                 kw2 = dict(ax=axes[f"CCS_row{regType}"][i], x=beta_arr)
                 kw2.update(dict(CCS_plot_type=CCS_plot_type))
-                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
-                kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
+                kw2.update(dict(params=params, key=key))
+                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
+                kw2.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
+                kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
                 kw2.update(dict(spl=spl, is_log=True, colors=colors, last_row=regType==3))
                 kw2.update(dict(raw_method=raw_method))
                 ax_CCS(**kw2)
@@ -506,8 +519,10 @@ def plot_Graph_CCS(
 
                 kw2 = dict(ax=axes[f"CCS_row{row}"][i], x=beta_arr)
                 kw2.update(dict(CCS_plot_type=CCS_plot_type))
-                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params, key=key))
-                kw2.update(dict(noise=CCS_stat, err_type=err_type, dpi=dpi, CCS_type=CCS_type))
+                kw2.update(dict(params=params, key=key))
+                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
+                kw2.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
+                kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
                 kw2.update(dict(spl=row, is_log=True, colors=colors, last_row=row==spl[-1]))
                 kw2.update(dict(raw_method=raw_method, show_legend=i == 1))
                 ax_CCS(**kw2)
@@ -526,9 +541,11 @@ def plot_Graph_CCS(
             kw3.update(dict(params=params, colors=colors))
             kw3.update(dict(nodeList=DD[params]["Sier"].nodeList, GTDict=DD[params]["GTDict"]))
             ax_Graph(**kw3)
-            kw4 = dict(ax=axes["CCS"][i], x=beta_arr, CCS_arr=DD[params]["CCS_arr"], params=params)
+            kw4 = dict(ax=axes["CCS"][i], x=beta_arr, params=params)
             kw4.update(dict(spl=spl_current, CCS_plot_type=CCS_plot_type))
-            kw4.update(dict(key=key, noise=CCS_stat, err_type=err_type, CCS_type=CCS_type))
+            kw4.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
+            kw4.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
+            kw4.update(dict(key=key, err_type=err_type, CCS_type=CCS_type))
             kw4.update(dict(show_legend=i == 1, is_log=True, colors=colors, dpi=dpi, last_row=lr))
             kw4.update(dict(raw_method=raw_method))
             ax_CCS(**kw4)
@@ -564,7 +581,8 @@ def plot_Graph_CCS(
             axlabel.set_axis_off()  # same as ax.axis('off')
             kw5 = dict(fontsize=17, horizontalalignment="center", transform=axlabel.transAxes)
             axlabel.text(-2.4, 1.05, f"{text_labels[i]}", **kw5)
-    saveNclose427(fig, fname + "_const", dpi=dpi, sub_folder_name=sub_folder_name)
+    fname += "_sim" if beta_arr2 is None else "_ep"
+    saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name)
     if varb:
         saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
 
@@ -583,7 +601,7 @@ def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, an
     if sub_folder_name == "":
         sub_folder_name = "graphs_singletons"
     regType, p, n = tup  # unpack tup
-    DD = plot_side(beta_arr=beta_arr)(tup)
+    DD = plot_side(beta_arr=beta_arr, beta_arr2=None)(tup)  # TODO needs to have proper beta_arr2
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     height_ratios, width_ratios = [1, 4, 5], [17, 1]
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
@@ -615,7 +633,7 @@ def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, an
 
 def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
            noise=None, spl=-1, varb=False, err_type='ste', CCS_type='mean', show_legend=False,
-           is_log=True, colors=None, dpi=None, last_row=False):
+           is_log=True, colors=None, dpi=None, last_row=False, noise_ep=None):
     """
     Args
     ----
@@ -653,6 +671,13 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
     - show_legend (bool): whether we show simulation parameters
     - is_log (bool): if True then use log scale on x axis.
     - last_row (bool): whether it is at last row
+    - noise_ep (dict of 3D/4D nparr): numerical approximation using exposure theory
+        for point estimation, it's 3D; for pdf and support, it's 4D obviously
+        the CCS plot will not involve any simulation results if noise_ep is not None
+        noise_ep['mean'][s,i,beta]
+        s: similar to simulation, s should correspond to that in simulation; s=0 <-> T=1500, etc
+        i: CCS level
+        beta: beta, what else could it mean
 
     Intermediary
     ------------
@@ -740,7 +765,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
         if show_legend:
             sty1.update(dict(label=f"lv{i+1}/lv{i+2}"))
         ax.plot(x, CCS_arr[:, CCS_type_slice, i], **sty1)  # plot analytical curve
-        if noise is not None:  # put scatter points of simulated results in
+        if noise is not None:  # put scatter points
             if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
                 kw1 = dict(color=cmap(i), zorder=1)
                 y_mean = noise["mean"][params][spl, 3 + i, bs]
@@ -748,18 +773,44 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
                 ax.plot(ax.get_xlim(), [y_mean] * 2, **kw1)  # draw line
                 kw1.update(dict(y1 = [y_mean - y_err] * 2, y2 = [y_mean + y_err] * 2))
                 ax.fill_between(x=ax.get_xlim(), **kw1, alpha=0.27)  # draw colored region
-            # plot fixed beta (scatter plot)
+            # scatter plot
             sty2 = dict(linestyle="None", capsize=4.0, marker=".", markersize=11)
             sty2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
             sty2.update(dict(markeredgecolor=cmap(i), markerfacecolor=cmap(i), ecolor=cmap(i)))
             # if show_legend:
             #     sty2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-            kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
-            kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
-            kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
-            if raw_method is None:
+            if noise_ep is None:  # simulated results
+                kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
+                kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
+                kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
+            else:  # numerical approximation
+                kw_erb = dict(x=noise_ep["beta"])  # beta
+                kw_erb.update(dict(y=noise_ep["mean"][spl, i, :]))  # mean of CCS
+                kw_erb.update(dict(yerr=noise_ep["std"][spl, i, :]))  # std of CCS
+            if noise_ep is not None:  # ideal violin (overlaid): pdf
+                kw_temp = dict(color=cmap(i), alpha=0.27, linewidth=0)
+                bbdry = make_beta_boundry(noise_ep["beta"].shape[0], b=10)  # log-uniform
+                for b, beta in enumerate(bbdry[:, 0]):
+                    x0 = noise_ep["ps"][spl, i, b, :]  # min-max rescaled pdf
+                    x0 = x0 / TODO(x0, noise_ep["rs"][spl, i, b, :])  # TODO norm by a variable
+                    idx0, idx1 = 0, None
+                    for w in range(len(x0)):  # find the middle where p > 0
+                        if not np.isclose(x0[w], 0, rtol=0, atol=1e-10):
+                            idx0 = w
+                            break
+                    for w in range(len(x0)):  # find the middle where p > 0
+                        if not np.isclose(x0[-w - 1], 0, rtol=0, atol=1e-10):
+                            idx1 = -w - 1
+                            break
+                    idx1 = None if idx1 == -1 else idx1 + 1
+                    kw_temp["y"] = noise_ep["rs"][spl, i, b, idx0:idx1]
+                    x0 = x0[idx0:idx1]
+                    kw_temp["x1"] = bbdry[b, 1] + (1 - x0) * (bbdry[b, 0] - bbdry[b, 1])
+                    kw_temp["x2"] = bbdry[b, 0] + x0 * (bbdry[b, 2] - bbdry[b, 0])
+                    ax.fill_betweenx(**kw_temp)
+            elif raw_method is None:
                 return 0
-            elif raw_method.startswith("violin"):  # violin plot (overlaid)
+            elif raw_method.startswith("violin"):  # stochastic violin (overlaid)
                 # TODO haven't implemented it in temp_a2()
                 data_vl = [noise["raw"][params][spl, i, b, :] for b in range(bs2.start, bs2.stop)]
                 pos_vl = noise["mean"][params][spl, 0, bs2]  # beta
@@ -777,7 +828,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None,
                 for pc in parts['bodies']:
                     pc.set_facecolor(cmap(i))
                     pc.set_alpha(0.27)
-                if raw_method[-6:] == "median":  # plot median and ste_median instead
+                if raw_method[-6:] == "median" and noise_ep is None:  # plot median and ste_median instead
                     kw_erb.update(dict(y=noise["median"][params][spl, 3 + i, bs2]))
                     kw_erb.update(dict(yerr=noise["ste_median"][params][spl, 3 + i, bs2]))
 

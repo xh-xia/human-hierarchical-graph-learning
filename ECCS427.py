@@ -21,23 +21,25 @@ from CCS427v2 import ax_CCS, make_A_hat_beta
 def ECCS_main():
     cwd = set_dir427()  # script dir
     colors = colors_selector(str="5-class Greens")
+    ECCS_type = 2
+    full_yrange = False
 
-    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[None])
+    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[None], ECCS_type=ECCS_type)
+    beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
+    kwargs = dict(sub_folder_name="ECCS", colors=colors, ECCS_type=ECCS_type, full_yrange=full_yrange)
+    plot_hists_ECCS(MEM, (3, 3, 3), **kwargs)
+
+    return 0
     kwargs = dict(cwd=cwd + "/input/empirical_data/", )
     for nback_idx in [0, 1]:  # 0 -> direct fit; 1 -> MLE
-        for gof_thres in [0.80, 0.85, 0.90, 0.95]:
-            # get_process_beta_2src(nback_idx=nback_idx, gof_thres=gof_thres, **kwargs)
+        for gof_thres in [None, 0, 0.80, 0.85, 0.90, 0.95]:
+            get_process_beta_2src(nback_idx=nback_idx, gof_thres=gof_thres, **kwargs)
             pass
 
 
-    beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
-    kwargs = dict(sub_folder_name="ECCS", colors=colors)
-    plot_hists_ECCS(MEM, (3, 3, 3), **kwargs)
-    return 0
-
 
 def plot_hists_ECCS(
-    MEM, params, raw_method=None, err_type="ste",
+    MEM, params, raw_method=None, err_type="ste", ECCS_type=1, full_yrange=False,
     colors=None, dpi=None, sub_folder_name=""
 ):
     """It produces histograms for three params and 1 ECCS plot
@@ -60,6 +62,10 @@ def plot_hists_ECCS(
     - sub_folder_name (str):
         the name of the folder in f"output/{whatnot}/" to store the plots
         where <whatnot> is defined in saveNclose427()
+    - ECCS_type (int):
+        this only affects file name and the actual selection of ECCS type happens in make_ECCS_arr()
+    - full_yrange (bool):
+        if False, (-5, 10): -5 <= ECCS (any level) <= 10
 
     Intermediary
     ------------
@@ -85,7 +91,8 @@ def plot_hists_ECCS(
     axes = dict()
     axes["Hists"], axes["CCS"], axes["labels"] = [None] * 3, [None] * 2, [None] * 5
 
-    fname = f"histECCS"
+    temp_txt = "full_ECCS_range"*full_yrange + "ECCS-5to10"*(not full_yrange)
+    fname = f"histECCS{ECCS_type}_{temp_txt}"
 
     keys = dict(r0=r"$r_0$", r1=r"$r_1$", beta=r"$\beta$")
     ibt = 2  # number of portions to space (sub)figures
@@ -102,7 +109,7 @@ def plot_hists_ECCS(
 
     for i, k in enumerate(keys):
         arr = [v[k] for v in MEM.values()]
-        ax_hist(axes["Hists"][i], arr, keys[k], density=False)
+        ax_hist(axes["Hists"][i], arr, keys[k], density=False, logscale=i==2)
 
     kw_axl = dict(fontsize=17, horizontalalignment="center")
     text_labels = ["A", "B", "C", "D", "E"]  # panel label list
@@ -114,7 +121,8 @@ def plot_hists_ECCS(
         kw_axl.update(dict(transform=axes["labels"][i].transAxes))
         axes["labels"][i].text(label_rpos[i], 1.09, f"{text_labels[i]}", **kw_axl)
 
-    ECCS_arr, num_exc = make_ECCS_arr(MEM, (1e-4, 999), (-5, 10))
+    yrange = None if full_yrange else (-5, 10)
+    ECCS_arr, num_exc = make_ECCS_arr(MEM, (1e-4, 999), yrange, ECCS_type=ECCS_type)
     t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2)
     # print(num_exc, ECCS_arr)
     for i in range(2):
@@ -147,7 +155,7 @@ def t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2):
         print(f"(Wilcoxon) pval = {result2.pvalue:.4f}")
 
 
-def make_ECCS_arr(MEM, xlim=None, ylim=None):
+def make_ECCS_arr(MEM, xlim=None, ylim=None, ECCS_type=1):
     """ exclude outliers
     Kwargs
     ------
@@ -158,7 +166,8 @@ def make_ECCS_arr(MEM, xlim=None, ylim=None):
     #     ylim = (-5, 10)  # exclude if ECCS at any level is < -5 or > 10
     # if xlim is None:
     #     xlim = (0, 999)  # exclude if beta == 1e3 (because beta will not go beyond 1e3 or below 0)
-    def nonce(arr, alim):  # arr is x["ECCS"] or [x["beta"]]
+    temp_eccs = "ECCS" if ECCS_type == 1 else f"ECCS{ECCS_type}"
+    def nonce(arr, alim):  # arr is x[temp_eccs] or [x["beta"]]
         if alim is None:  # no exclusion
             return True
         for a in arr:
@@ -167,16 +176,16 @@ def make_ECCS_arr(MEM, xlim=None, ylim=None):
         return True
     a = np.array(
         [
-            [x["beta"], *x["ECCS"]]
+            [x["beta"], *x[temp_eccs]]
             for x in MEM.values()
-            if nonce(x["ECCS"], ylim) and nonce([x["beta"]], xlim)
+            if nonce(x[temp_eccs], ylim) and nonce([x["beta"]], xlim)
         ]
     )
     num_exc = len(MEM) - a.shape[0]
     return a, num_exc
 
 
-def ax_hist(ax, arr, xlabel, density=True):
+def ax_hist(ax, arr, xlabel, density=False, logscale=False):
     """
     Intermediary
     ------------
@@ -185,7 +194,7 @@ def ax_hist(ax, arr, xlabel, density=True):
         - <stat>_mid: stat among the mid_range subjects (i.e., those s.t. 0 < beta < 1000)
         - 0 or 1000: number of subjects whose beta = 0 or 1000
     """
-    kwargs = dict(density=density)
+    kwargs = dict(density=density, edgecolor="black", linewidth=0.7)
     if xlabel != r"$\beta$":
         scale_y = 10 ** 3 if xlabel == r"$r_0$" else 10 ** 4
         xlabel += " (ms)"
@@ -199,18 +208,29 @@ def ax_hist(ax, arr, xlabel, density=True):
         bool_mid = np.logical_not(bool_0s | bool_1ks)
         stats_data["0"] = sum(bool_0s)
         stats_data["1000"] = sum(bool_1ks)
-        stats_data["sup2.5"] = sum(arr >= 2.5)
+        stats_data["(2.5,1000)"] = sum((arr > 2.5) & (arr < 1000))
+        stats_data["(0,1e-4)"] = sum((arr > 0) & (arr < 1e-4))
         arr = arr[bool_mid]
         stats_data["mean_mid"] = np.mean(arr)
         stats_data["median_mid"] = np.median(arr)
-        print(stats_data)
-        kwargs.update(dict(bins=10))
+        print("beta stats:\n", stats_data)
         # ticks_loc = np.logspace(10**(-4), 10, num=6)
         # ticks_label = [r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$", r"$10^{-1}$", r"$10^{0}$", r"$10^{1}$"]
         # ax.set_xticks(ticks_loc)
-        # ax.set_xscale("log")  # set x to log scale
-        # ax.set_xlim([10**(-3), 10])
-        ax.set_xlim([0, 2.5])
+        if logscale:
+            ax.set_xscale("log")  # set x to log scale
+            xlim = [1e-4, 1e1]
+            kwargs.update(dict(bins=np.geomspace(xlim[0],xlim[1],20)))
+            # https://stackoverflow.com/questions/45905135/matplotlib-missing-minor-ticks-on-y-axis-because-of-log-range-10-decades
+            locmaj = ticker.LogLocator(base=10.0, subs=(1.0, ), numticks=100)
+            ax.xaxis.set_major_locator(locmaj)
+            locmin = ticker.LogLocator(base=10.0, subs=np.arange(2, 10) * 0.1, numticks=100)
+            ax.xaxis.set_minor_locator(locmin)
+            ax.xaxis.set_minor_formatter(ticker.NullFormatter())
+        else:
+            xlim = [1e-4, 3.1]
+            kwargs.update(dict(bins=np.linspace(xlim[0],xlim[1],20)))
+        ax.set_xlim(xlim)
     ax.hist(arr, **kwargs)
     # ax.set_title(title, fontsize=17)
     ax.set_xlabel(xlabel, fontsize=11)
@@ -345,7 +365,8 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
 
     ax.set_title(title, fontsize=17)
     ax.set_xlabel(xlabel, fontsize=11)
-    ax.set_ylabel(ylabel, fontsize=11)
+    if lv == 0:  # only show y label on lv 1 ECCS
+        ax.set_ylabel(ylabel, fontsize=11)
     if is_log:
         ax.set_xscale("log")  # set x to log scale
         loc="upper left"
@@ -358,16 +379,25 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
     return xmaxs
 
 
-def get_ECCS_from_data(cwd="", plot_data=None):
+def get_ECCS_from_data(cwd="", plot_data=None, ECCS_type=1):
     """calculate ECCS for each subject
     process processed data (including rt_pred) and MEM results into dictionaries
 
     ECCS: for each subject
+    There are 2 flavors of ECCS that are complementary to each other:
+    1) ECCS1 - rt/linear part: we explicitly only use r0 and r1 | ECCS_type==1
     anticipation = (regressed_out rt - r0) / r1 (for given edgelv)
     ECCS at level l = mean(anticipation at edgelv=l) - mean(anticipation at edgelv=l+1)
     NOTE however, mean() is two-fold:
         first mean across all instances of transitions on given edge
         then mean across edges at given edgelv (using results from above step)
+
+    2) ECCS2 - beta part: we explicitly only use beta (fitting process) | ECCS_type==2
+    anticipation from beta fitting process:
+    one of the last steps is to calculate "belief" using mental counts
+    in addition to outputting normalized belief, we can output raw mental counts (numerator) too
+    ECCS2 calculation is very similar to how CCS is calculated from simulation results
+    to get mental count matrix, we use last belief count for each edge
 
     Return
     ------
@@ -375,7 +405,7 @@ def get_ECCS_from_data(cwd="", plot_data=None):
         fit_dict (dict): keys: "beta", "r0", "r1"; "ECCS" is arr of ECCS
     """
     temp = os.listdir(cwd)
-    fname = "MEM.json"
+    fname = "MEM.json"  # TODO add all mental count columns to json as well
     if fname in temp:
         with open(cwd + fname) as f:
             MEM = json.load(f)
@@ -388,23 +418,34 @@ def get_ECCS_from_data(cwd="", plot_data=None):
         df = df.set_index("id")
         MEM = df.to_dict("index")
 
+        # below add new entries to MEM.json
+        df = pd.read_csv(cwd + "data_sier.csv")
+        # ECCS calculation happens here
+        if ECCS_type == 1:
+            def ant(x):
+                return (x.loc["rt"] - x.loc["rt_pred"] - MEM[x.id]["r0"]) / MEM[x.id]["r1"]
+            df["ant"] = df.apply(ant, axis=1)
+            pd_series = df.groupby(by="id").apply(ECCS1)
+            for id, val in pd_series.iteritems():
+                MEM[id]["ECCS"] = val[0]
+                MEM[id]["ants_arr"] = val[1]
+                MEM[id]["rts_arr"] = val[2]
+                MEM[id]["rts_edgelv"] = val[3]
+                MEM[id]["rts_pred_arr"] = val[4]
+                MEM[id]["rts_pred_edgelv"] = val[5]
+                MEM[id]["edges_arr"] = val[6]
+        elif ECCS_type == 2:
+            df_MC = pd.read_csv(cwd + "MEM_results.csv")  # need those 1000 columns for mental counts
+            df_MC = df_MC.set_index("id")
+            pd_series = df.groupby(by="id").apply(ECCS2, df_MC=df_MC)
+            for id, val in pd_series.iteritems():
+                MEM[id]["ECCS2"] = val[0]
+                MEM[id]["ants2_arr"] = val[1]
+                MEM[id]["edges_arr"] = val[2]
 
-    def ant(x):  # x.name is "id"
-        return (x.loc["rt"] - x.loc["rt_pred"] - MEM[x.name]["r0"]) / MEM[x.name]["r1"]
+        with open(cwd + fname, "w") as f:
+            json.dump(MEM, f, indent=4)
 
-    df = pd.read_csv(cwd + "data_sier.csv")
-    df = df.set_index("id")
-    df["ant"] = df.apply(ant, axis=1)
-    pd_series = df.groupby(level="id").apply(ECCS)
-
-    for id, val in pd_series.iteritems():
-        MEM[id]["ECCS"] = val[0]
-        MEM[id]["ants_arr"] = val[1]
-        MEM[id]["rts_arr"] = val[2]
-        MEM[id]["rts_edgelv"] = val[3]
-        MEM[id]["rts_pred_arr"] = val[4]
-        MEM[id]["rts_pred_edgelv"] = val[5]
-        MEM[id]["edges_arr"] = val[6]
 
     if plot_data is None:  # plot none
         plot_data = [-1]
@@ -515,8 +556,6 @@ def get_ECCS_from_data(cwd="", plot_data=None):
     
 
 
-    with open(cwd + fname, "w") as f:
-        json.dump(MEM, f, indent=4)
     return MEM
 
 
@@ -530,17 +569,21 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
 
     Kwarg
     -----
-    - nback_idx (int): estimate of nback beta; 0 -> direct fit; 1 -> MLE; 2 -> gof for 0
-    - gof_thres (float): in analysis, only use those whose gof >= gof_thres
+    - nback_idx (int): estimate of nback beta; 0 -> direct fit; 1 -> MLE; 2(3) -> gof for 0(1)
+    - gof_thres (float): in analysis, only use those whose gof >= gof_thres; r-squared adjusted
 
     Intermediary
     ------------
     beta_sier/beta_nback (dict): k:v -> id:beta (NOTE we convert id str -> int)
     beta_arr (2D nparr): row -> index for id; col -> beta for each source
     beta_arr_filt (2D nparr): keep non-extreme & good gof
-        1) 0 <= beta <= 6 on both axes
-        2) gof >= 0.8
+        1) 0 < beta < 1000 on both axes
+        1*) 0 <= beta <= 6 on both axes
+        1**) 0 < beta < 1000 on network beta only
+        2) 0 <= beta <= 1000 on n-back beta only (there are -1 and inf)
+        3) gof >= 0.8
     """
+    show_full = False  # show all network vs. n-back or not
     temp = os.listdir(cwd)
     fname = "MEM.json"
     if fname in temp:
@@ -561,7 +604,7 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
         df = pd.read_csv(cwd + "beta_nback.csv")
         df = df.set_index("id")
         beta_nback = df.to_dict("index")
-        temp_keys = ["beta_nback", "beta_nback_MLE", "gof_nback"]  # gof -> r-squared adjusted
+        temp_keys = ["beta_nback", "beta_nback_MLE", "gof_nback", "gof_nback_MLE"]
         beta_nback = {k:[v[key] for key in temp_keys] for k,v in beta_nback.items()}
         with open(cwd + fname, "w") as f:  # int -> str in keys automatically
             json.dump(beta_nback, f, indent=4)
@@ -578,7 +621,10 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     for i, k in enumerate(beta_sier):
         beta_arr[i, 0] = beta_sier[k]
         beta_arr[i, 1] = beta_nback[k][nback_idx]
-        if 0 <= beta_sier[k] <= 6 and 0 <= beta_nback[k][nback_idx] <= 6 and beta_nback[k][2] >= gof_thres:
+        cond_gof = True if gof_thres is None else (beta_nback[k][2 + nback_idx] >= gof_thres)
+        # if 0 <= beta_sier[k] <= 6 and 0 <= beta_nback[k][nback_idx] <= 6 and cond_gof:
+        # if 0 < beta_sier[k] < 1e3 and 0 < beta_nback[k][nback_idx] < 1e3 and cond_gof:
+        if 0 < beta_sier[k] < 1e3 and 0 <= beta_nback[k][nback_idx] <= 1e3 and cond_gof:  # threshold based on network beta
             key_set.add(k)
     # print(f"DEBUG beta ids that remain: {key_set}")
     beta_arr_filt = np.zeros((len(key_set), 2), dtype=float)
@@ -591,15 +637,13 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     spearmanr = stats.spearmanr(beta_arr_filt, axis=0)
     ander_sier = stats.anderson(beta_arr_filt[:, 0], dist="norm")
     ander_nback = stats.anderson(beta_arr_filt[:, 1], dist="norm")
-    print(f"\n nback {txt_beta_arr} β; gof thresholded at>={gof_thres:.2f}:")
+    text_gof1 = "all" if gof_thres is None else f"{gof_thres:.2f}"
+    print(f"\n nback {txt_beta_arr} β; gof thresholded at {text_gof1}")
     print(f"network β:{ander_sier.statistic:.3g}\n", ander_sier.critical_values, ander_sier.significance_level)
     print(f"nback β:{ander_nback.statistic:.3g}\n", ander_nback.critical_values, ander_nback.significance_level, end="\n")
 
     fig = plt.figure(figsize=[14, 6])  # initialize
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax2 = fig.add_subplot(1, 2, 2)
-    axes = [ax1, ax2]
-    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax1.transAxes)
+    axes = [fig.add_subplot(1, 2, 1), fig.add_subplot(1, 2, 2)]
     temp_median1 = np.median(beta_arr[:, 0])
     temp_median2 = np.median(beta_arr[:, 1])
     temp_mean1 = np.mean(beta_arr_filt[:, 0])
@@ -607,12 +651,26 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     temp_median3 = np.median(beta_arr_filt[:, 0])
     temp_median4 = np.median(beta_arr_filt[:, 1])
 
-    ax1.scatter(beta_arr[:, 1], beta_arr[:, 0])
-    ax1.set_title(r"$\beta$: network vs. n-back", fontsize=17)
-    ax1.text(0.8, 0.90, f"$n={beta_arr.shape[0]:d}$", **styles_txt)
-    ax1.text(0.6, 0.85, f"median={temp_median1:.3f} (network) | {temp_median2:.3f} (n-back)", **styles_txt)
+    ax1, ax2 = axes  # unpack
+    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax1.transAxes)
+    if show_full:
+        ax1.scatter(beta_arr[:, 1], beta_arr[:, 0])
+        ax1.set_title(r"$\beta$: network vs. n-back", fontsize=17)
+        ax1.text(0.8, 0.90, f"$n={beta_arr.shape[0]:d}$", **styles_txt)
+        ax1.text(0.6, 0.85, f"median={temp_median1:.3f} (network) | {temp_median2:.3f} (n-back)", **styles_txt)
+    else:
+        beta_diff = beta_arr_filt[:, 1] - beta_arr_filt[:, 0]
+        ax1.scatter(range(beta_arr_filt.shape[0]), beta_diff)
+        ax1.plot(ax1.get_xlim(), [0] * 2, "--", zorder=0, color="grey")  # draw line
+        text_gof2 = "" if gof_thres is None else fr"; gof$\geq${gof_thres:.2f}"
+        ax1.set_title(fr"$\beta$: n-back - network ({txt_beta_arr}{text_gof2})", fontsize=17)
+        # ax1.text(0.8, 0.95, f"$r_s={spearmanr.correlation:.3f}$, $p={spearmanr.pvalue:.3f}$", **styles_txt)
+        ax1.text(0.8, 0.90, f"$n={beta_arr_filt.shape[0]:d}$", **styles_txt)
+        ax1.text(0.8, 0.85, f"mean={np.mean(beta_diff):.3f} (diff)", **styles_txt)
+        ax1.text(0.8, 0.80, f"median={np.median(beta_diff):.3f} (diff)", **styles_txt)
+
     ax2.scatter(beta_arr_filt[:, 1], beta_arr_filt[:, 0])
-    ax2.set_title(fr"$\beta$: network vs. n-back ({txt_beta_arr}; gof$\geq${gof_thres:.2f})", fontsize=17)
+    ax2.set_title(fr"$\beta$: network vs. n-back ({txt_beta_arr}{text_gof2})", fontsize=17)
     styles_txt.update(dict(transform=ax2.transAxes))
     ax2.text(0.8, 0.95, f"$r_s={spearmanr.correlation:.3f}$, $p={spearmanr.pvalue:.3f}$", **styles_txt)
     ax2.text(0.8, 0.90, f"$n={beta_arr_filt.shape[0]:d}$", **styles_txt)
@@ -622,10 +680,13 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     for ax in axes:
         ax.set_xlabel(r"n-back $\beta$", fontsize=11)
         ax.set_ylabel(r"network $\beta$", fontsize=11)
-    saveNclose427(fig, f"beta_arr_{txt_beta_arr}_gofgeq-{gof_thres:.2f}", dpi=300, sub_folder_name="100subs\\betas")
+    if not show_full:
+        axes[0].set_xlabel("index", fontsize=11)
+        axes[0].set_ylabel(r"difference in $\beta$", fontsize=11)
+    saveNclose427(fig, f"beta_arr_{txt_beta_arr}_gofgeq-{text_gof1}", dpi=300, sub_folder_name="100subs\\betas")
 
 
-def ECCS(df):
+def ECCS1(df):
     """df should come from groupby(level="id")
     df should have fields: "ant", "node", "node_prev", "edgelv", "rt", "rt_pred"
 
@@ -694,6 +755,87 @@ def ECCS(df):
     rts_pred_arr = [rts_pred[e] for lv in lv_arr for e in edgelvs[lv]]
 
     return eccs, ants_arr, rts_arr, rts_edgelv, rts_pred_arr, rts_pred_edgelv, edges_arr
+
+
+def ECCS2(df, df_MC):
+    """df should come from groupby(level="id")
+    df should have fields: "node", "node_prev", "edgelv"
+    df_MC should have fields: "M_1", ..., "M_1000"
+    even though this requires two inputs, it actually is simpler than ECCS1,
+    because heavy-lifting was done in the max entropy model param fitting process
+
+    Intermediary
+    ------------
+    - ants (dict): k:v -> edge:[n, x]; x is last mental count; n is corresponding trial number
+        edge is a frozenset of two elements (or one, if self-loop): source and target nodes
+        we search from last trial backwards to first trial
+        if we find the edge, we update it once and will not touch it again until normalization step
+        becomes k:v -> edge:x_prob after row-normalization
+    - edgelvs (dict): k:v -> edgelv (int):set of edge (set of frozenset)
+
+    after completing ants (iterating over all rows of df)
+    we find mean for each edge; then mean for each edgelv; then ECCS
+
+    Return
+    ------
+    eccs (list): eccs[i]: level i+1 ECCS
+    ants_arr (list): last mental count for each edge (sorted by level, ascending order)
+    edges_arr (list): list of len-2 lists; NOTE the list is ordered (frozenset -> list)
+    """
+    ants = dict()
+    edgelvs = dict()
+    n = len(df)
+    id = df["id"].iloc[0]
+    if n > 1000:
+        msg = f"oof, in data_sier.csv, id={id} has {n} trials, "
+        msg += "> available mental counts in MEM_results.csv"
+        raise Exception(msg)
+    for i in range(-1, -1 - n, -1):  # a bit inefficient since it loops all trials in df
+        row = df.iloc[i]
+        edge = frozenset([int(row.node), int(row.node_prev)])  # np.int64 -> int; work w/ JSON
+        trial_MC = row.trial - 500  # col for df_MC
+        temp_MC = df_MC[f"M_{trial_MC}"].loc[id]  # mental count
+        if pd.isnull(temp_MC):  # if any entry is empty, smth is wrong with df_MC, raise!
+            raise Exception(f"oof, in MEM_results.csv, id={id} \"M_{trial_MC}\" column is empty")
+        if edge not in ants:  # add new entries to ants and edgelvs; ONLY once per edge
+            ants[edge] = [row.trial, temp_MC]
+            if row.edgelv not in edgelvs:  # add only if never seen this edgelv
+                edgelvs[row.edgelv] = set([edge])
+            else:  # add new edge for this edgelv
+                edgelvs[row.edgelv].add(edge)
+
+    # row-normalized mental counts
+    def temp_set2list(e):  # turn frozenset e into an edge (list)
+        temp = list(e)
+        if len(temp) == 1:  # self-loop; frozenset only has 1 element
+            temp = [temp[0], temp[0]]
+        return temp
+    N = max([max(e) for e in ants]) + 1  # num of nodes
+    W = np.zeros((N, N))
+    for e in ants:
+        temp = temp_set2list(e)
+        W[temp[0],temp[1]] = ants[e][1]
+        W[temp[1],temp[0]] = ants[e][1]
+    W = W_norm(W)
+
+    edgelvs = {k:list(v) for k,v in edgelvs.items()}  # s.t. edge order is fixed
+    edgelvs_l = {k:[temp_set2list(x) for x in v] for k,v in edgelvs.items()}  # s.t. edge is subscriptable
+
+    # find ECCS2
+    for edge in ants:  # keep only mental counts
+        ants[edge] = ants[edge][1]
+    lv_arr = sorted([x for x in edgelvs if x >= 1])  # 1,2,...,lv_max
+    edges_arr = [list(e) for lv in lv_arr for e in edgelvs[lv]]  # s.t. edge is subscriptable
+    mean_weights = [0.0 for _ in range(lv_arr[-1])]
+    for lv in lv_arr:
+        # mean_weights[lv - 1] = np.mean([ants[e] for e in edgelvs[lv]])  # unnormalized
+        mean_weights[lv - 1] = np.mean([W[e[0],e[1]] for e in edgelvs_l[lv]])
+
+    eccs = list(np.divide(mean_weights[:-1], mean_weights[1:]))  # calculate ECCS2
+    # turn ants into a sorted list
+    ants_arr = [ants[e] for lv in lv_arr for e in edgelvs[lv]]
+
+    return eccs, ants_arr, edges_arr
 
 
 if __name__ == "__main__":

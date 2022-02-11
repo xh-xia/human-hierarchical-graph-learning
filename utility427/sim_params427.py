@@ -51,6 +51,27 @@ def make_beta_mat(N, n, binned=False, b=10, seed=427):
     return beta_mat
 
 
+def make_beta_boundry(N, b=10):
+    """
+    this is to return the aa and bb in make_beta_mat()
+
+    Return
+    ------
+    - beta_bdry (2D nparr): dim=(N, 3); 2nd dim is mid, aa, bb respectively
+    """
+    beta_bdry = np.zeros((N, 3), dtype=float)
+    # first generate log-uniformly spaced beta_arrs of len=N from 10**-3 to 10**1
+    # aim to cover both end points but due to floating point error the last point may not be 10**1
+    t0, t1 = -3, 1
+    dt = (t1 - t0 ) / (N - 1)  # (linearly) evenly spaced
+    t0 -= dt  # extend the start and end with two more points
+    for i in range(N):
+        beta_bdry[i, 0] = b ** (t0 + dt * (i + 1))  # mid point
+        beta_bdry[i, 1] = b ** (t0 + dt * (i + 1 - 0.5))  # left boundary
+        beta_bdry[i, 2] = b ** (t0 + dt * (i + 1 + 0.5))  # right boundary
+    return beta_bdry
+
+
 def make_sim_params(params, binned=False):
     """set up parameters for simulations
 
