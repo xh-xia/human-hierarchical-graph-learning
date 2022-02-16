@@ -194,3 +194,10 @@ def unique_iter(iter_):  # 'tis a generator function to work in tandem with iter
             continue
         UNIQUE.add(x)
         yield x
+
+
+def print427(txt, var=None):
+    print(f"\n=========={txt}==========\n")
+    if var is not None:
+        print(var)
+

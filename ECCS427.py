@@ -8,12 +8,13 @@ import pandas as pd
 from scipy import stats
 import statsmodels.formula.api as smf  # regressions
 
-from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_decorator
-from utility427.math427 import log_b, findNearest, rank_eigvals, W_norm, np
+from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_decorator, print427
+from utility427.math427 import log_b, findNearest, rank_eigvals, W_norm, np, pval_star
 from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec, Line2D, ticker
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_violin_pw
 from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427, W_CG
+from utility427.sim_params427 import make_beta_boundry
 
 from CCS427v2 import ax_CCS, make_A_hat_beta
 
@@ -22,11 +23,14 @@ def ECCS_main():
     cwd = set_dir427()  # script dir
     colors = colors_selector(str="5-class Greens")
     ECCS_type = 2
-    full_yrange = False
+    yrange = (-3, 6) if ECCS_type == 1 else None
+    # yrange = (-3, 6)
+    # yrange = None
 
     MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[None], ECCS_type=ECCS_type)
     beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
-    kwargs = dict(sub_folder_name="ECCS", colors=colors, ECCS_type=ECCS_type, full_yrange=full_yrange)
+    kwargs = dict(sub_folder_name="ECCS", colors=colors, ECCS_type=ECCS_type)
+    kwargs.update(dict(yrange=yrange, boxed=True))
     plot_hists_ECCS(MEM, (3, 3, 3), **kwargs)
 
     return 0
@@ -39,7 +43,7 @@ def ECCS_main():
 
 
 def plot_hists_ECCS(
-    MEM, params, raw_method=None, err_type="ste", ECCS_type=1, full_yrange=False,
+    MEM, params, err_type="ste", ECCS_type=2, yrange=None, boxed=False,
     colors=None, dpi=None, sub_folder_name=""
 ):
     """It produces histograms for three params and 1 ECCS plot
@@ -52,9 +56,6 @@ def plot_hists_ECCS(
 
     Kwargs
     ------
-    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
-        - violin: vanilla violin plot
-        - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - colors (list of color hex strings):
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
@@ -64,8 +65,9 @@ def plot_hists_ECCS(
         where <whatnot> is defined in saveNclose427()
     - ECCS_type (int):
         this only affects file name and the actual selection of ECCS type happens in make_ECCS_arr()
-    - full_yrange (bool):
-        if False, (-5, 10): -5 <= ECCS (any level) <= 10
+    - yrange (None or len-2 list-like):
+        if not None, (a, b): a <= ECCS (any level) <= b
+    - boxed (bool): whether we bin the ECCS
 
     Intermediary
     ------------
@@ -77,13 +79,13 @@ def plot_hists_ECCS(
     is_log = True
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    fig = plt.figure(figsize=[10, 4])  # initialize
+    fig = plt.figure(figsize=[20, 9])  # initialize
 
     ds = 0.2  # dummy axes for spacing between the visible plots
     hf = 9  # relative height of (sub)figure
     wf = 1  # relative width of (sub)figure's portion
     width_ratios = [wf] * 31
-    height_ratios = [1, hf, ds, 7] + [1, hf, ds]
+    height_ratios = [1, hf, ds, 3] + [1, hf + 4, ds]
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
     kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
     gs = GridSpec(**kw1)
@@ -91,8 +93,6 @@ def plot_hists_ECCS(
     axes = dict()
     axes["Hists"], axes["CCS"], axes["labels"] = [None] * 3, [None] * 2, [None] * 5
 
-    temp_txt = "full_ECCS_range"*full_yrange + "ECCS-5to10"*(not full_yrange)
-    fname = f"histECCS{ECCS_type}_{temp_txt}"
 
     keys = dict(r0=r"$r_0$", r1=r"$r_1$", beta=r"$\beta$")
     ibt = 2  # number of portions to space (sub)figures
@@ -121,51 +121,110 @@ def plot_hists_ECCS(
         kw_axl.update(dict(transform=axes["labels"][i].transAxes))
         axes["labels"][i].text(label_rpos[i], 1.09, f"{text_labels[i]}", **kw_axl)
 
-    yrange = None if full_yrange else (-5, 10)
+    temp_txt = "ECCS_full" if yrange is None else f"ECCS_{yrange[0]:d}to{yrange[1]:d}"
+    fname = f"histECCS{ECCS_type}_{temp_txt}"
     ECCS_arr, num_exc = make_ECCS_arr(MEM, (1e-4, 999), yrange, ECCS_type=ECCS_type)
-    t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2)
-    # print(num_exc, ECCS_arr)
+    box_dict = sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=2, boxed=boxed)
+    sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=2, boxed=boxed)
+    spearmanr = stats.spearmanr(ECCS_arr[:, [1, 2]], axis=0)
+    temp_var = f"corr={spearmanr.correlation:.3f} pval={spearmanr.pvalue:.5f}"
+    print427(f"corr: ECCS{ECCS_type} lv1 to lv2", var=temp_var)
+    box_list = [box_dict.pop("bbdry"), None]
+    box_list[1] = box_dict
     for i in range(2):
-        kw_ECCS = dict(ax=axes["CCS"][i], x=ECCS_arr[:, 0], CCS_arrs=None, params=params)
-        kw_ECCS.update(dict(raw_method=raw_method, err_type=err_type))
+        kw_ECCS = dict(ax=axes["CCS"][i], ECCS_arr=ECCS_arr, params=params)
+        kw_ECCS.update(dict(box_list=box_list, err_type=err_type))
         kw_ECCS.update(dict(show_legend=False, is_log=is_log, colors=colors, dpi=dpi))
-        kw_ECCS.update(dict(ECCS_arr=ECCS_arr, CG_lv=0, lv=i))
+        kw_ECCS.update(dict(CG_lv=0, lv=i, yrange=yrange, ECCS_type=ECCS_type))
         ax_ECCS(**kw_ECCS)
-    saveNclose427(fig, fname + " (log)"*is_log, dpi=dpi, sub_folder_name=sub_folder_name)
+    fname += "_log" * is_log + "_boxed" * boxed
+    saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name)
 
 
-def t_test_ECCS(MEM, ECCS_arr, num_exc, ccs_lv=2):
+def sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=None, boxed=False):
     """
-    greater (one-sided) one-sample t-test per ccs_lv
+    greater (one-sided) one-sample t-test / Wilcoxon per ccs_lv
+    they test if mean/median is different from null's mean/median
+    Wilcoxon signed-rank test tests if diff (one sample - null) is symmetric around 0 
     H0: ECCS = 1
     Ha: ECCS > 1
+
+    also test diff (lv l - lv (l+1))
+
+    - boxed (bool): if True, we return a dict `box_dict`
+    the bin is left inclusive: [a, b) i.e., a <= beta < b (the last one obviously is <=b)
+    "bbdry": bbdry from make_beta_boundry()
+    b: b is box index, 0,...,9, val is another dict with following k:v pair
+        "mask": (1D nparr) bool_mask of ECCS_arr in that box
+        "n": (int) number of subjects in that bin
+        "center": (float) center beta of the bin
+        "Wilcoxon": (list) Wilcoxon pval for each CCS lv
+
+    return arr, bbdry
+
     xlims = [(4.5e-3, 2), (2e-3, 2e-1)]
     xlims = [(4.5e-3, 2), (4.5e-3, 2e-1)]
     ylims = [(-5, 10), (-5, 10)]
     """
     kwargs = dict(axis=0, nan_policy="raise", alternative="greater")
     kwargs2 = dict(alternative="greater")
+    n_sample = ECCS_arr.shape[0]  # sample size
+    if ccs_lv is None:
+        ccs_lv = ECCS_arr.shape[1] - 1  # infer number of CCS level
+    print427("ECCS mean/median - 1 compared to 0", var=f"n={n_sample} | removed {num_exc} outliers")
     for i in range(ccs_lv):
-        n_sample = ECCS_arr.shape[0]  # sample size
-        the_mean = np.mean(ECCS_arr[:, i + 1])
-        result = stats.ttest_1samp(ECCS_arr[:, i + 1], popmean=1, **kwargs)
-        result2 = stats.wilcoxon(ECCS_arr[:, i + 1], y = [1] * n_sample, **kwargs2)
-        print(f"ECCS lv={i + 1} | mean = {the_mean:.2f} | n={n_sample} | removed {num_exc} outliers")
-        print(f"(t-test) pval = {result.pvalue:.4f}")
-        print(f"(Wilcoxon) pval = {result2.pvalue:.4f}")
+        diff = ECCS_arr[:, i + 1] - 1  # compared to baseline of 1
+        the_mean = np.mean(diff)
+        result = stats.ttest_1samp(diff, popmean=0, **kwargs)
+        result2 = stats.wilcoxon(diff, **kwargs2)
+        temp_txt = f"lv={i + 1} | diff mean = {the_mean:.2f}"
+        temp_txt += f" | (t-test) pval = {result.pvalue:.4f}"
+        temp_txt += f" | (Wilcoxon) pval = {result2.pvalue:.4f}"
+        print(temp_txt)
+
+    print427("ECCS mean/median: one lv to coarser lv", var=f"n={n_sample} | removed {num_exc} outliers")
+    for i in range(ccs_lv-1):
+        diff = ECCS_arr[:, i + 1] - ECCS_arr[:, i + 2]  # ECCS diff across 2 adjacent levels
+        the_mean = np.mean(diff)
+        result = stats.ttest_1samp(diff, popmean=0, **kwargs)
+        result2 = stats.wilcoxon(diff, **kwargs2)
+        temp_txt = f"lv={i + 1}-lv={i + 2} | diff mean = {the_mean:.2f}"
+        temp_txt += f" | (t-test) pval = {result.pvalue:.4f}"
+        temp_txt += f" | (Wilcoxon) pval = {result2.pvalue:.4f}"
+        print(temp_txt)
+
+    if boxed:
+        bbdry = make_beta_boundry(10, b=10)  # log-uniform; 10 bins/boxes
+        box_dict = dict()
+        box_dict["bbdry"] = bbdry
+        # assume ECCS_arr is sorted in beta (ECCS_arr[:, 0])
+        for i, beta in enumerate(bbdry[:, 0]):  # loop over centers
+            box_dict[i] = dict()
+            bool_mask = bbdry[i, 1] <= ECCS_arr[:, 0]
+            if i != n_sample - 1:
+                bool_mask = np.logical_and(bool_mask, ECCS_arr[:, 0] < bbdry[i, 2])
+            else:
+                bool_mask = np.logical_and(bool_mask, ECCS_arr[:, 0] <= bbdry[i, 2])
+            box_dict[i]["mask"] = bool_mask
+            box_dict[i]["n"] = sum(bool_mask)
+            box_dict[i]["center"] = beta
+            box_dict[i]["Wilcoxon"] = [None] * ccs_lv
+            if box_dict[i]["n"] != 0:  # if == 0, undefined (None) pval since n=0
+                for j in range(ccs_lv):
+                    diff = ECCS_arr[bool_mask, j + 1] - 1  # compared to baseline of 1
+                    box_dict[i]["Wilcoxon"][j] = stats.wilcoxon(diff, **kwargs2).pvalue
+        return box_dict
+    else:
+        return None
 
 
-def make_ECCS_arr(MEM, xlim=None, ylim=None, ECCS_type=1):
+def make_ECCS_arr(MEM, xlim=None, ylim=None, ECCS_type=1, sort_beta=True):
     """ exclude outliers
     Kwargs
     ------
     - xlim/ylim (tuple): include only those in [LB, UB] x -> beta; y -> ECCS
+    - sort_beta (bool): whether we sort the entries of a by beta (a[:, 0])
     """
-    # below is default value
-    # if ylim is None:
-    #     ylim = (-5, 10)  # exclude if ECCS at any level is < -5 or > 10
-    # if xlim is None:
-    #     xlim = (0, 999)  # exclude if beta == 1e3 (because beta will not go beyond 1e3 or below 0)
     temp_eccs = "ECCS" if ECCS_type == 1 else f"ECCS{ECCS_type}"
     def nonce(arr, alim):  # arr is x[temp_eccs] or [x["beta"]]
         if alim is None:  # no exclusion
@@ -182,6 +241,9 @@ def make_ECCS_arr(MEM, xlim=None, ylim=None, ECCS_type=1):
         ]
     )
     num_exc = len(MEM) - a.shape[0]
+    if sort_beta:
+        idx_sorted = np.argsort(a[:, 0])  # sort by beta
+        a = a[idx_sorted, :]
     return a, num_exc
 
 
@@ -213,7 +275,7 @@ def ax_hist(ax, arr, xlabel, density=False, logscale=False):
         arr = arr[bool_mid]
         stats_data["mean_mid"] = np.mean(arr)
         stats_data["median_mid"] = np.median(arr)
-        print("beta stats:\n", stats_data)
+        print427("beta stats", var=stats_data)
         # ticks_loc = np.logspace(10**(-4), 10, num=6)
         # ticks_label = [r"$10^{-4}$", r"$10^{-3}$", r"$10^{-2}$", r"$10^{-1}$", r"$10^{0}$", r"$10^{1}$"]
         # ax.set_xticks(ticks_loc)
@@ -253,13 +315,13 @@ def ax_hist(ax, arr, xlabel, density=False, logscale=False):
         ax.set_ylabel("Frequency", fontsize=11)
 
 
-def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='ste', CG_lv=0,
-           show_legend=False, is_log=True, colors=None, dpi=None, lv=0):
+def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
+           show_legend=False, is_log=True, colors=None, dpi=None, lv=0, yrange=None, ECCS_type=2):
     """
     Args
     ----
     - ax: axis object
-    - x: a list of beta
+    - ECCS_arr: generated from make_ECCS_arr()
     - params (tuple): (regType, p, n)
         - regType (int):
             0: default Sierpiński graph
@@ -267,13 +329,12 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
 
     Kwargs
     ------
-    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
-        - violin: vanilla violin plot; show mean and SD
-        - violin_median: show median and ste_median instead
+    - box_list (len-2 list): bbdry and nested dict
     - ECCS_arr (2D nparr): ECCS_arr[i, [0,1,2]]: [beta, ECCS_1, ECCS_2]
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - show_legend (bool): whether we show simulation parameters
-    - is_log (bool): if True then use log scale on x axis.
+    - is_log (bool): if True then use log scale on x axis
+    - yrange & ECCS_type: both are only used for ax.set_ylim()
 
     Intermediary
     ------------
@@ -285,6 +346,7 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
         xmaxs[i]: beta that maximizes CCS at lv(i+1)/lv(i+2)
     """
     # set up beta range (analytical) for plot
+    x = ECCS_arr[:, 0]  # beta
     if is_log:
         x_range = (min(x) * 0.55, max(x) * 1.55)
     else:
@@ -294,15 +356,7 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     (regType, p, n) = params
-    # CCS_arr = CCS_arrs["CCS"]  # analytical
-    # n_level = CCS_arr.shape[2]
     n_level = n - 1  # for (3,3,3), max CCS level is 2
-    if n_level == n - 1:  # normally there are only n-1* levels (since CCS is function of 2 lvs)
-        pass
-    elif n_level == n:  # *it could be violated, due to regularization
-        n_level -= 1  # don't show higher level introduced by regularization
-    else:
-        raise Exception("something went wrong in <CCS_arr.shape[2]>")
     CCS_type_slice = 0
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
     xlabel = r"Shuffling Parameter $\beta$"
@@ -321,7 +375,7 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
 
     sty1 = dict(alpha= 0.74, linewidth= 2)
 
-    def temp_a1(i):  # draw ECCS w/o analytical for now
+    def temp_a1(i):  # draw ECCS
         sty1.update(dict(color=cmap(i)))
         if show_legend:
             sty1.update(dict(label=f"lv{i+1}/lv{i+2}"))
@@ -331,11 +385,49 @@ def ax_ECCS(ax, x, CCS_arrs, params, raw_method=None, ECCS_arr=None, err_type='s
         sty2.update(dict(alpha = 0.74, linewidth = 2, zorder=2))
         # if show_legend:
         #     sty2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-        kw_spt = dict(x=ECCS_arr[:, 0])
-        kw_spt.update(dict(y=ECCS_arr[:, i + 1]))
+        kw_spt = dict(x=x, y=ECCS_arr[:, i + 1])
         ax.scatter(**kw_spt, **sty2)
-        if raw_method is None:
-            return 0
+        styles_txt = dict(fontsize=11, horizontalalignment="left", transform=ax.transAxes)
+        ax.text(0.01, 0.88, f"n={kw_spt['y'].shape[0]:d}", **styles_txt)
+        if box_list is not None:
+            bbdry, box_dict = box_list  # unpack
+            bdata = [ECCS_arr[:, i + 1][box_dict[b]["mask"]] for b in box_dict if box_dict[b]["n"] != 0]
+            positions = [box_dict[b]["center"] for b in box_dict if box_dict[b]["n"] != 0]
+            max_ECCS = [max(j) for j in bdata]
+            if is_log:  # create a dummy axis and plot boxes on that axis
+                ax_bx = ax.twiny()  # instantiate a separate x-axis for equal spacing boxes
+                # below position kwarg are crucial steps, turn exp to linear (log scale)
+                widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
+                kwargs = dict(widths=widths, manage_ticks=False, whis=(0, 100))  # full range whisker
+                ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
+                ax_bx.boxplot(bdata, positions=log_b(positions, 10), **kwargs)
+                ax_bx.xaxis.set_visible(False)  # hide twin axis, and doesn't take up space
+            else:
+                ax.boxplot(bdata, positions=positions)  # incomplete but unused
+            
+            # show Wilcoxon signed-rank tests (both per bin and global)
+            # global
+            diff = ECCS_arr[:, i + 1] - 1  # compared to baseline of 1
+            pval = stats.wilcoxon(diff, alternative="greater").pvalue
+            ax.text(0.01, 0.94, f"Wilcoxon {pval_star(pval, star=False)}", **styles_txt)
+            # pval2 = 1 - sum(diff > 0) / diff.shape[0]
+            # ax.text(0.99, 0.91, f"Proportion {pval_star(pval2, star=False)}", **styles_txt)
+            # ax.text(0.99, 0.91, f"Proportion p={pval2:.3f}", **styles_txt)
+            # per bin
+            styles_txt.pop("transform", None)
+            styles_txt.update(dict(horizontalalignment="center"))
+            for j, a in enumerate(bdata):  # loop over each bin (beta)
+                diff = a - 1  # compared to baseline of 1
+                pval = stats.wilcoxon(diff, alternative="greater").pvalue
+                ax.text(positions[j], max_ECCS[j] + 0.05, pval_star(pval, star=True), **styles_txt)
+                # pval2 = 1 - sum(diff > 0) / diff.shape[0]
+                # ax.text(temp_betas[i], 0.92, pval_star(pval2, star=True), **styles_txt)
+            
+            if yrange is not None:  # only match both lvs to a fix val if yrange is explicitly set
+                if ECCS_type == 1:
+                    ax.set_ylim(yrange)
+                else:
+                    ax.set_ylim((0.6, 1.6))
     
 
     # def temp_b1(i):  # annotate CCS plot with maxima

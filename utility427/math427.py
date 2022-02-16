@@ -184,7 +184,7 @@ def bootstrap427(nparr, axis, n_sample, statistic0, statistic1=None, repeat=Fals
 
     kwargs = dict(rng_idx=rng_idx, repeat=repeat)
     for i, func1d in enumerate([statistic0, statistic1]):
-        if i==1 and func1d is None:
+        if i == 1 and func1d is None:
             kwargs[f"funct_stat{i}"] = None
         elif func1d == "mean":
             kwargs[f"funct_stat{i}"] = np.nanmean
@@ -293,6 +293,28 @@ def rank_eigvals(A, eig_k=None, rtol=1e-05):
         return (eigvals, eigvecs, l, kth_eigval, kth_eigvec)
     else:
         return (eigvals, eigvecs, l)
+
+
+# endregion
+
+
+# region: stats
+
+
+def pval_star(pval, star=True):
+    if star:
+        return "" + "*" * (pval < 0.05) + "*" * (pval < 0.01) + "*" * (pval < 0.001) + "*" * (pval < 0.0001)
+    else:
+        if pval >= 0.05:
+            return "p>=0.05"
+        elif 0.01 <= pval < 0.05:
+            return "p<0.05"
+        elif 0.001 <= pval < 0.01:
+            return "p<0.01"
+        elif 0.0001 <= pval < 0.001:
+            return "p<0.001"
+        else:
+            return "p<0.0001"
 
 
 # endregion
