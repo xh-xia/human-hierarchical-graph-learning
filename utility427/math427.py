@@ -198,6 +198,17 @@ def bootstrap427(nparr, axis, n_sample, statistic0, statistic1=None, repeat=Fals
     return np.apply_along_axis(func1d_bs427, axis=axis, arr=nparr, **kwargs)
 
 
+def npdivide0(num, denom, atol=1.e-14, filler=None):
+    # convention: if denom is close to 0, fraction is np.nan
+    temp_out = np.zeros_like(num)
+    temp_where = ~np.isclose(denom, temp_out, rtol=0, atol=atol)
+    if filler is None:
+        temp_out.fill(np.nan)
+    else:
+        temp_out.fill(filler)
+    return np.divide(num, denom, out=temp_out, where=temp_where)
+
+
 # region: linear algebra
 
 """

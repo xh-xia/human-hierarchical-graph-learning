@@ -160,6 +160,8 @@ def make_sim_params(params, binned=False):
         params["pd"] = unique_iter(
             chain.from_iterable([product(*hierDict["reg_n"]), product(*hierDict["reg_p"])])
         )
+    elif params["key_class"].startswith(("emp")):  # empirical setup, focus on (3,3,3)
+        params["pd"] = product([3], [3], [3])
     else:  # for other simulations like "r" or "study_low_beta"
         params["pd"] = product([0, 1, 2, 3], [3], [3])
     params["pd"] = list(params["pd"])  # to prevent from exhausting generator

@@ -400,10 +400,16 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
                 widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
                 kwargs = dict(widths=widths, manage_ticks=False, whis=(0, 100))  # full range whisker
                 ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
-                ax_bx.boxplot(bdata, positions=log_b(positions, 10), **kwargs)
+                parts = ax_bx.boxplot(bdata, positions=log_b(positions, 10), **kwargs)
                 ax_bx.xaxis.set_visible(False)  # hide twin axis, and doesn't take up space
             else:
-                ax.boxplot(bdata, positions=positions)  # incomplete but unused
+                parts = ax.boxplot(bdata, positions=positions)  # incomplete but unused
+            
+            if True: # match box colors to scatter
+                for pc in parts.values():
+                    for line in pc:
+                        line.set_color(cmap(i))
+                        line.set_alpha(1)
             
             # show Wilcoxon signed-rank tests (both per bin and global)
             # global
@@ -419,15 +425,18 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
             for j, a in enumerate(bdata):  # loop over each bin (beta)
                 diff = a - 1  # compared to baseline of 1
                 pval = stats.wilcoxon(diff, alternative="greater").pvalue
-                ax.text(positions[j], max_ECCS[j] + 0.05, pval_star(pval, star=True), **styles_txt)
+                ax.text(positions[j], max_ECCS[j] + 0.005, pval_star(pval, star=True), **styles_txt)
                 # pval2 = 1 - sum(diff > 0) / diff.shape[0]
                 # ax.text(temp_betas[i], 0.92, pval_star(pval2, star=True), **styles_txt)
+                ax.text(positions[j], max_ECCS[j] + 0.060, f"{len(diff):d}", **styles_txt)
             
             if yrange is not None:  # only match both lvs to a fix val if yrange is explicitly set
                 if ECCS_type == 1:
                     ax.set_ylim(yrange)
                 else:
                     ax.set_ylim((0.6, 1.6))
+            else:  # if None, set it to (0.6, 1.6) anyway
+                ax.set_ylim((0.6, 1.6))
     
 
     # def temp_b1(i):  # annotate CCS plot with maxima

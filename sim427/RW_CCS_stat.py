@@ -49,7 +49,7 @@ def print_progress(counter):
         print(f"Progresss: {counter}")
 
 
-def main_CCS_stat(CCS_key):
+def main_CCS_stat():
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()
@@ -142,4 +142,4 @@ def main_CCS_stat(CCS_key):
 
 
 if __name__ == "__main__":
-    main_CCS_stat(CCS_key)
+    main_CCS_stat()

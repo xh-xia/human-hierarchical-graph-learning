@@ -68,7 +68,7 @@ def regType_is_0_1_3(job):
 @Project.operation  # for running the main simulations (outputing count matrices)
 @Project.post(RW_done)
 def RW_run(job):
-    GLsim_object = RW_Graph_Class.GLsim(**job.sp)
+    GLsim_object = RW_Graph_Class.GLsim2(**job.sp)
     job.data["GLsim_data"] = GLsim_object.walks()
 
 

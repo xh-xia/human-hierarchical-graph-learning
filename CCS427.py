@@ -5,13 +5,16 @@ Created: Monday, ‎April ‎5, ‎2021, ‏‎3:59:47 PM (EDT; maybe earlier ac
 @author: Xiaohuan (Pixel) X.
 """
 
+import warnings
+# warnings.filterwarnings("error")  # raise even on warnings
+
 from scipy import stats  # for corr stats
 from itertools import product  # for nested loops
 from concurrent.futures import ProcessPoolExecutor  # for multi-processing
 from concurrent.futures import ThreadPoolExecutor  # for multi-threading
 
 from utility427.helper427 import set_dir427, mkdir_p, get_params, partial_427_decorator
-from utility427.math427 import log_b, findNearest, rank_eigvals, W_norm, np, pval_star
+from utility427.math427 import log_b, findNearest, rank_eigvals, W_norm, np, pval_star, npdivide0
 from utility427.plt427 import plt, Normalize, LinearSegmentedColormap, GridSpec, Line2D  # mpl
 from utility427.plt427 import saveNclose427, colors_selector, cbrLabel427, get_violin_pw  # mpl helpers
 from utility427.plt427 import load_CCS_stat, save_masks
@@ -177,6 +180,53 @@ def plot_side(tup, beta_arr, beta_arr2=None):
     return dd
 
 
+def powers_MC427(noise, params, res=1000, n_samp_grid=None, pval=0.05):
+    """ it's a two-way simulation to find powers (i.e., prob of rejecting null if alt is true)
+    if to do it in R, one needs to input noise, the only actual data input for this function, to R
+    and output 3D arr back to python
+    currently only implemented for the first sample slice (spl=0): 1500 walk length
+    1) was done in getting the noise
+    2) MC simulatino to draw from noise
+    for each beta in noise:
+        for each sample size n_samp in n_samp_grid:
+            find power of Wilcoxon signed-rank test:
+                MC sample data from noise w/ replacement, do it for res * n_samp times
+
+    Kwargs
+    ------
+    - res (int): number of draws from noise; this determines the resolution of MC simulation
+    - n_samp_grid (None or arr-like): the sample size to be swept through to get powers of
+    - pval (float): pval threshold for power
+    
+    Return
+    ------
+    - powers (3D nparr): dim=(b, s, c)
+    b = len(noise["mean"][params][spl, 0, :]) (1st is sample period; 2nd means 3rd is beta)
+    s = len(n_samp_grid)
+    c = len(noise["raw"][params][spl, :, 0, 0]); number of CCS lvs
+        the entry is then power for each corresponding (beta, n_samp, CCS_lv) pair
+    """
+    RNG = np.random.default_rng()  # no specific seed
+    spl = 0
+    s = len(n_samp_grid)
+    b = len(noise["mean"][params][spl, 0, :])  # beta arr
+    c = len(noise["raw"][params][spl, :, 0, 0])
+    powers = np.zeros((b, s, c))
+    for i in range(b):  # beta loop
+        for j in range(s):  # sample grid loop
+            for k in range(c):  # CCS lv loop
+                count = 0  # count instances of rejecting null (i.e., p_wilcoxon < pval)
+                temp = noise["raw"][params][spl, k, i, :]  # full noise data
+                full_size = len(temp)
+                for _ in range(res):  # MC loop; 1-sample Wilcoxon: subtract baseline 1
+                    idx_arr = RNG.choice(full_size, size=n_samp_grid[j])  # MC sample w/ replace
+                    result = stats.wilcoxon(temp[idx_arr] - 1, alternative="greater").pvalue
+                    count += (result < pval)
+                powers[i, j, k] = count / res  # find power
+
+    return powers
+
+
 def make_A_hat_beta(A, beta):
     """generate A_hat according to Max Entropy Model
 
@@ -338,7 +388,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
             # if i == findNearest(beta_arr, 0.3, is_arg = True):
             #     print("DEBUG [analytical] mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
             temp1 = np.divide(mean_weights[:-1], mean_weights[1:])  # ditto, but more explicit
-            temp2 = np.divide(std_weights[:-1], std_weights[1:])  # ditto, but more explicit
+            temp2 = npdivide0(std_weights[:-1], std_weights[1:], atol=1.e-14, filler=np.nan)
             for l in range(0, lv - 1):  # l is index, corresponding CCS lv is l+1
                 CCS_arr[i, 0, l] = temp1[l]
                 CCS_arr[i, 1, l] = temp2[l]
@@ -364,7 +414,7 @@ def CCS_analysis(GTDict, beta_arr, A_hat_list=None, analytic=False):
             # temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
             # temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
             temp1 = np.divide(mean_weights[:-1], mean_weights[1:])  # ditto, but more explicit
-            temp2 = np.divide(std_weights[:-1], std_weights[1:])  # ditto, but more explicit
+            temp2 = npdivide0(std_weights[:-1], std_weights[1:], atol=1.e-14, filler=np.nan)
             for l in range(0, lv - 1):
                 CCS_arr[i, 0, l] = temp1[l]
                 CCS_arr[i, 1, l] = temp2[l]
@@ -388,9 +438,10 @@ def plot_Graph_CCS(
     ------
     - CCS_stat (dict): CCS_stat['mean'], CCS_stat['std'], and CCS_stat['ste'] have:
         same keys as DD; value is 3D nparr (see RW_CCS_stat.py for description)
-    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
-        - violin: vanilla violin plot
-        - violin_median: show median in red, and only 2nd lv CCS as well (1st lv is as expected)
+    - raw_method (str): if prefix in ["violin", "box"], assume CCS_stat has "raw" key
+        - "violin": vanilla violin plot
+        - "violin_median": show median in red, and only 2nd lv CCS as well (1st lv is as expected)
+        - "box": box plot; same settings as ECCS box plot
     - spl (int or list): what indices of sample to draw data from CCS_stat; -1 is the last sample
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
@@ -401,6 +452,7 @@ def plot_Graph_CCS(
         e.g., plt.rcParams['axes.prop_cycle'].by_key()['color'] is default color in pyplot:
         ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
     - regCCS (int):
+        0: display 1 row of 2 cols of CCCS with no graphs; each col corresponds to a CCS level
         1: display 4 rows of CCS with no graphs
         assume:
             hierDict['reg_n'] = [[0,1,2,3],[3],[3,4,5]]
@@ -408,7 +460,8 @@ def plot_Graph_CCS(
             hierDict['reg_p'] = [[0,1,2,3],[3,4,5],[3]]
         2: display 3 rows: 1 graph 2 CCS; no varb implemented for this yet; spl is forced to be list
         3: display 5 rows of CCS with no graphs; all of regType=3 since that's the exp setup
-        4: display 1 row of 2 cols of CCCS with no graphs; each col corresponds to a CCS level
+        4: display 5 row of n cols of CCS with no graphs; each but one col corresponds to a CCS level
+            row varies in number of agents per bin: np.array([1, 5, 10, 50, 100]) * (n_agents // 100)
     - sub_folder_name (str):
         the name of the folder in f"output/{whatnot}/" to store the plots
         where <whatnot> is defined in saveNclose427()
@@ -435,35 +488,33 @@ def plot_Graph_CCS(
 
     if colors is None:
         colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-    if regCCS==1:
-        fig = plt.figure(figsize=[20, 18])  # initialize
-        if varb:
-            fig2 = plt.figure(figsize=[20, 18])  # initialize
-    elif regCCS==2:
-        fig = plt.figure(figsize=[20, 13.5])  # initialize
-    elif regCCS==3:
-        fig = plt.figure(figsize=[20, 22])  # initialize
-    else:
-        fig = plt.figure(figsize=[20, 9])  # initialize
-        if varb:
-            fig2 = plt.figure(figsize=[20, 9])  # initialize
+
+    if regCCS==0:  # 2 rows
+        n_rows = 2
+    elif regCCS==1:  # 4 rows
+        n_rows = 4
+    elif regCCS==2:  # 3 rows
+        n_rows = 3
+    elif regCCS in [3, 4]:  # 5 rows
+        n_rows = 5
+    else:  # 1 row; n_level cols
+        n_rows = 1
+    if regCCS in [0, 1, 2, 3]:
+        n_cols = 3
+    elif regCCS == 4:  # n_level=n-1 + 1 cols
+        n_cols = DD_keys[0][2]
+    else:  # n_level cols
+        n_cols = DD_keys[0][2] - 1
+
+    fig = plt.figure(figsize=[6.5 * n_cols, 4.5 * n_rows])  # initialize
+    if varb:
+        fig2 = plt.figure(figsize=[6.5 * n_cols, 4.5 * n_rows])  # initialize
 
     ds = 0.2  # dummy axes for spacing between the visible plots
-    cbW = 1  # colorbar width
-    hf = 9  # relative height of (sub)figure
-    width_ratios = [ds, 19, cbW] * 3  # ≡ [ds,19,cbW,ds,19,cbW,ds,19,cbW]
-    if regCCS==0:  # 2 rows
-        height_ratios = [1, hf, ds, 1] * 1 + [1, hf, ds]
-    elif regCCS==1:  # 4 rows
-        height_ratios = [1, hf, ds, 1] * 3 + [1, hf, ds]
-    elif regCCS==2:  # 3 rows
-        height_ratios = [1, hf, ds, 1] * 2 + [1, hf, ds]
-    elif regCCS==3:  # 5 rows
-        height_ratios = [1, hf, ds, 1] * 4 + [1, hf, ds]
-    elif regCCS==4:  # 1 row
-        height_ratios = [1, hf, ds, 1]
-        width_ratios = [ds, 19, cbW] * (DD_keys[0][2] - 1)
-
+    hf = 9  # relative height of sub-figure
+    # cbW = 1  # colorbar width; need it if we draw networks
+    height_ratios = ([1, hf, ds, 1] * n_rows)[:-1]  # remove last sub-row
+    width_ratios = [ds, 19, ds] * n_cols
 
     kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
     kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
@@ -484,19 +535,25 @@ def plot_Graph_CCS(
     elif regCCS == 2:
         axes["Graph"], axes["CCS"], axes["Colorbar"] = [None] * 3, [None] * 6, [None] * 3
     elif regCCS == 4:
+        for row in range(5):
+            axes[f"CCS_row{row}"] = [None] * DD_keys[0][2]
+    else:
         axes["CCS"] = [None] * (DD_keys[0][2] - 1)
 
     fname = f"CCS_{key}"
     if CCS_stat is not None:
         # both group size and walk length are the same across all beta
         if regCCS!=2:
-            if regCCS in [0, 1, 4]:  # spl (int)
+            if regCCS in [0, 1]:  # spl (int)
                 n_agents = round(CCS_stat["mean"][DD_keys[0]][spl, 1, 0])
                 n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
                 fname += f"_{n_agents}_{n_steps}_{err_type}_{CCS_type}"
             elif regCCS == 3:  # spl (list)
                 n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
                 fname += f"_{n_agents}_allsteps_{err_type}_{CCS_type}"
+            elif regCCS == 4:  # spl (int; 0)
+                n_steps = round(CCS_stat["mean"][DD_keys[0]][spl, 2, 0])
+                fname += f"_allagents_{n_steps}_{err_type}_{CCS_type}"
         else:
             n_agents = round(CCS_stat["mean"][DD_keys[0]][spl[-1], 1, 0])  # same for any spl
             n_steps1 = round(CCS_stat["mean"][DD_keys[0]][spl[0], 2, 0])
@@ -519,8 +576,8 @@ def plot_Graph_CCS(
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
                 kw2.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
                 kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
-                kw2.update(dict(spl=spl, is_log=True, colors=colors, last_row=regType==3))
-                kw2.update(dict(raw_method=raw_method))
+                kw2.update(dict(spl=spl, is_log=True, colors=colors, has_xlabel=regType==3))
+                kw2.update(dict(raw_method=raw_method, has_title=True))
                 ax_CCS(**kw2)
                 if varb:
                     kw2.update(dict(ax=axes2[f"CCS_row{regType}"][i], varb=varb))
@@ -540,8 +597,8 @@ def plot_Graph_CCS(
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
                 kw2.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
                 kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
-                kw2.update(dict(spl=row, is_log=True, colors=colors, last_row=row==spl[-1]))
-                kw2.update(dict(raw_method=raw_method, show_legend=i == 1))
+                kw2.update(dict(spl=row, is_log=True, colors=colors, has_xlabel=row==spl[-1]))
+                kw2.update(dict(raw_method=raw_method, show_legend=i == 1, has_title=True))
                 ax_CCS(**kw2)
                 if varb:
                     kw2.update(dict(ax=axes2[f"CCS_row{regType}"][i], varb=varb))
@@ -563,8 +620,8 @@ def plot_Graph_CCS(
             kw4.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
             kw4.update(dict(noise_ep=DD[params]["CCS_stat_ep"]))
             kw4.update(dict(key=key, err_type=err_type, CCS_type=CCS_type))
-            kw4.update(dict(show_legend=i == 1, is_log=True, colors=colors, dpi=dpi, last_row=lr))
-            kw4.update(dict(raw_method=raw_method))
+            kw4.update(dict(show_legend=i == 1, is_log=True, colors=colors, dpi=dpi, has_xlabel=lr))
+            kw4.update(dict(raw_method=raw_method, has_title=True))
             ax_CCS(**kw4)
             if varb:
                 axes2["Graph"][i] = fig2.add_subplot(gs[0:3, i * 3 + 1])
@@ -581,9 +638,33 @@ def plot_Graph_CCS(
                 params = DD_keys[i]
                 kw4.update(dict(ax=axes["CCS"][i+3]))
                 kw4.update(dict(CCS_arr=DD[params]["CCS_arr"], params=params))
-                kw4.update(dict(spl=spl_current, show_legend=i == 1, last_row=True))
+                kw4.update(dict(spl=spl_current, show_legend=i == 1, has_xlabel=True))
                 ax_CCS(**kw4)
     elif regCCS == 4:  # DD_keys has 1 entry: (3, 3, 3)
+        temp_n_agents = CCS_stat["mean"][DD_keys[0]][0, 1, 0]  # total number of agents
+        temp_n_agents = np.array([0.1, 0.3, 0.5, 0.7, 1]) * (temp_n_agents // 100)
+        # temp_n_agents = np.array([0.1, 0.5, 1, 10, 100]) * (temp_n_agents // 100)
+        # temp_n_agents = np.array([1, 5, 10, 50, 100]) * (temp_n_agents // 100)
+        temp_n_agents = np.around(temp_n_agents, decimals=0).astype(int, casting="unsafe")
+        plot_power(DD_keys[0], CCS_stat, colors, sub_folder_name, res=1000, pvals=None, dpi=None)
+        plot_corr(DD_keys[0], CCS_stat, colors, sub_folder_name, res=1000, spl=0, dpi=dpi)
+        for i in range(DD_keys[0][2]):  # col: all CCS level + per CCS level
+            for row in range(5):  # row
+                temp = gs[row * 4 : row * 4 + 3, i * 3 + 1]
+                axes[f"CCS_row{row}"][i] = fig.add_subplot(temp)
+                params = DD_keys[0]
+                temp_emp_lv = None if i == 0 else i
+
+                kw2 = dict(ax=axes[f"CCS_row{row}"][i], x=beta_arr)
+                kw2.update(dict(CCS_plot_type=CCS_plot_type))
+                kw2.update(dict(params=params, key=key))
+                kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
+                kw2.update(dict(noise_ep=None, emp_lv=temp_emp_lv))
+                kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
+                kw2.update(dict(spl=spl, is_log=True, colors=colors, has_xlabel=row==4, has_title=row==0))
+                kw2.update(dict(raw_method=raw_method, show_legend=i==0, n_agents=temp_n_agents[row]))
+                ax_CCS(**kw2)
+    else:  # DD_keys has 1 entry: (3, 3, 3)
         for i in range((DD_keys[0][2] - 1)):  # col
             temp = gs[0 : 3, i * 3 + 1]
             axes["CCS"][i] = fig.add_subplot(temp)
@@ -595,20 +676,20 @@ def plot_Graph_CCS(
             kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
             kw2.update(dict(noise_ep=None, emp_lv=i + 1))
             kw2.update(dict(err_type=err_type, dpi=dpi, CCS_type=CCS_type))
-            kw2.update(dict(spl=spl, is_log=True, colors=colors, last_row=True))
-            kw2.update(dict(raw_method=raw_method, show_legend=True))
+            kw2.update(dict(spl=spl, is_log=True, colors=colors, has_xlabel=True))
+            kw2.update(dict(raw_method=raw_method, show_legend=True, has_title=True))
             ax_CCS(**kw2)
     # panel label list
-    regCCS2row = {0:2, 1:4, 2:3, 3:5, 4:DD_keys[0][2] - 1}  # k:v -> regCCS:num_of_rows
+    regCCS2row = {0:2, 1:4, 2:3, 3:5, 4:5}  # k:v -> regCCS:num_of_rows
     # except for 4, which is regCCS:num_of_cols
     if regCCS in regCCS2row.keys():
         text_labels = [chr(ord("A") + i) for i in range(regCCS2row[regCCS])]
     else:
         raise NotImplementedError(f"<regCCS>={regCCS} is not implemented")
     for i in range(len(text_labels)):
-        if regCCS != 4:
+        if regCCS != 427:  # list label for each col
             axlabels = [fig.add_subplot(gs[i * 4 : i * 4 + 3, 0])]
-        else:
+        else:  # list label for each col; currently unused
             axlabels = [fig.add_subplot(gs[0 : 3, i * 3])]
         if varb:
             axlabels.append(fig2.add_subplot(gs[i * 4 : i * 4 + 3, 0]))
@@ -621,6 +702,128 @@ def plot_Graph_CCS(
     saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name)
     if varb:
         saveNclose427(fig2, fname + "_var", dpi=dpi, sub_folder_name=sub_folder_name)
+
+
+def plot_corr(params, noise, colors, sub_folder_name, res=1000, spl=0, dpi=None):
+    # res (int): number of points to divide total sample size `n_agents`
+    (regType, p, n) = params
+    n_level = n-1
+    cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
+    n_agents = noise["raw"][params][spl, 0, 0, :].shape[0]
+    n_samp = np.geomspace(1, n_agents, num=res, dtype=int)
+    fig = plt.figure(figsize=[6.5 * (n_level - 1), 4.5 * 1])  # initialize
+    ds = 0.2  # dummy axes for spacing between the visible plots
+    hf = 9  # relative height of sub-figure
+    height_ratios = ([1, hf, ds, 1] * 1)[:-1]  # remove last sub-row
+    width_ratios = [ds, 19, ds] * (n_level - 1)
+    axes = [None] * (n_level - 1)
+
+    kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
+    kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
+    gs = GridSpec(**kw1)
+    sty1 = dict(alpha=0.74, linewidth=2)
+
+    for i in range(n_level - 1):  # do it for each two CCS lvs
+        axes[i] = fig.add_subplot(gs[0 : 3, i * 3 + 1])
+        spearmanr2d = np.zeros((res, 2))
+        for j in range(res):
+            temp_shape = noise["raw"][params][spl, i:i+2, :, :n_samp[j]].shape
+            new_shape = (temp_shape[0], temp_shape[1] * temp_shape[2])
+            temp = np.reshape(noise["raw"][params][spl, i:i+2, :, :n_samp[j]], new_shape)
+            spearmanr = stats.spearmanr(temp, axis=1)
+            spearmanr2d[j, 0] = spearmanr.correlation
+            spearmanr2d[j, 1] = spearmanr.pvalue
+        pval_mask = spearmanr2d[:, 1] < 0.01  # significant part is colored cmap(i)
+        pval_mask_inv = np.invert(pval_mask)  # non-significant part is colored grey
+        sty1.update(dict(color=cmap(i), label=f"$r_s$(lv{i+1},lv{i+2})"))
+        axes[i].plot(n_samp[pval_mask], spearmanr2d[pval_mask, 0], **sty1)
+        sty1.update(dict(color="grey"))
+        axes[i].plot(n_samp[pval_mask_inv], spearmanr2d[pval_mask_inv, 0], **sty1)
+        axes[i].set_xscale("log")
+
+    fname = f"corr_param=({params[0]:d},{params[1]:d},{params[2]:d})"
+    saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name)
+
+
+def plot_power(params, noise, colors, sub_folder_name, res=1000, pvals=None, dpi=None):
+    """
+    NOTE the empirical sample sizes are hand coded (from ECCS427.py)
+
+    Intermediary
+    ------------
+    - power_dict(dict): k:v -> k is same as those in DD
+    v (3D nparr): dim=(b, s, c)
+
+    Plotting
+    row: beta bin | col: pval
+    for each subplot:
+        each color -> CCS lv
+    """
+    (regType, p, n) = params
+    n_level = n-1
+    cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
+    spl = 0
+    n_samp_grid = np.arange(1, 100)
+    n_samp_emp = [1, 1, 6, 7, 24, 22, 16, 2, 1, 0]  # hand coded
+    if pvals is None:
+        # pvals = [0.05, 0.01, 0.001]
+        pvals = [0.05, 0.01]
+    vs = [None] * len(pvals)
+    fname = f"powers=({params[0]:d},{params[1]:d},{params[2]:d})"
+    prefix = "input\\npy_files\\"
+    for i in range(len(pvals)):
+        temp_fname = fname + f"_pval={len(pval_star(pvals[i]-1e-10, star=True)):d}stars"
+        try:
+            vs[i] = np.load(f"{prefix}{temp_fname}.npy", allow_pickle=True)
+        except OSError:  # no file, calculate and save
+            vs[i] = powers_MC427(noise, params, res=res, n_samp_grid=n_samp_grid, pval=pvals[i])
+            np.save(f"{prefix}{temp_fname}.npy", vs[i])
+        print(f"DEBUG pval={pvals[i]:.5f} done")
+    # plot the power
+    fig = plt.figure(figsize=[6.5 * (len(pvals)), 4.5 * 10])  # initialize
+    ds = 0.2  # dummy axes for spacing between the visible plots
+    hf = 9  # relative height of sub-figure
+    height_ratios = ([1, hf, ds, 1] * 10)[:-1]  # remove last sub-row
+    width_ratios = [ds, 19, ds] * (len(pvals))
+    axes = [[None] * len(pvals)] * 10  # dim=(10,len(pvals))
+
+    kw1 = {"nrows": len(height_ratios), "ncols": len(width_ratios)}
+    kw1.update({"height_ratios": height_ratios, "width_ratios": width_ratios})
+    gs = GridSpec(**kw1)
+    sty1 = dict(alpha=0.74, linewidth=2)
+
+    xtick_loc = np.arange(n_samp_grid[0] - 1, n_samp_grid[-1] + 2, 5)  # both major and minor
+    xtick_loc_minor = [x for t, x in enumerate(xtick_loc) if t%2==1]
+    xtick_loc_major = [x for t, x in enumerate(xtick_loc) if t%2==0]
+    xtick_lab_minor = [f"{x:.0f}" for x in xtick_loc_minor]
+    xtick_lab_major = [f"{x:.0f}" for x in xtick_loc_major]
+
+    b = len(noise["mean"][params][spl, 0, :])  # beta arr
+    for i in range(b):  # row loop
+        for j in range(len(pvals)):  # col loop
+            axes[i][j] = fig.add_subplot(gs[i * 4 : i * 4 + 3, j * 3 + 1])
+            axes[i][j].set_xlim((n_samp_grid[0] - 1, n_samp_grid[-1] + 1))
+            axes[i][j].set_ylim((0, 1))  # power is prob, thus [0, 1]
+            axes[i][j].set_xticks(xtick_loc_minor, minor=True)
+            axes[i][j].set_xticks(xtick_loc_major, minor=False)
+            # axes[i][j].set_xticklabels(xtick_lab_minor, minor=True)
+            axes[i][j].set_xticklabels(xtick_lab_major, minor=False)
+            axes[i][j].set_yticks(np.arange(0, 1.1, 0.1))
+            axes[i][j].set_title(f"Beta Bin Index {i:d} (p={pvals[j]:.5g})", fontsize=17)
+            if i == b - 1:
+                axes[i][j].set_xlabel("Sample Size", fontsize=17)
+            for l in range(n_level):
+                sty1.update(dict(color=cmap(l), label=f"lv{l+1}/lv{l+2}"))
+                axes[i][j].plot(n_samp_grid, vs[j][i, :, l], **sty1)
+            xlim = axes[i][j].get_xlim()
+            axes[i][j].plot(xlim, (0.8, 0.8), "--", color="grey", zorder=0)  # 80%
+            axes[i][j].plot(xlim, (0.9, 0.9), "--", color="dimgrey", zorder=0)  # 90%
+            xlim = (n_samp_emp[i], n_samp_emp[i])
+            if xlim[0] > 0:
+                axes[i][j].plot(xlim, (0, 1), "--", color="red", zorder=0)  # emp
+            # axes[i][j].set_xscale("log")
+
+    saveNclose427(fig, fname, dpi=dpi, sub_folder_name=sub_folder_name)
 
 
 def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, annotate=None):
@@ -669,7 +872,7 @@ def plot_Graph(tup, beta_arr, dpi=None, sub_folder_name="", transparent=True, an
 
 def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, emp_lv=None,
            noise=None, spl=-1, varb=False, err_type='ste', CCS_type='mean', show_legend=False,
-           is_log=True, colors=None, dpi=None, last_row=False, noise_ep=None):
+           is_log=True, colors=None, dpi=None, has_xlabel=True, has_title=True, noise_ep=None, n_agents=None):
     """
     Args
     ----
@@ -695,19 +898,18 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
             2. same formula for both standard deviation and standard error
             f = A + B
             then s = sqrt(sA^2 + sB^2)
-    - raw_method (str): if prefix="violin", assume CCS_stat has "raw" key
-        - violin: vanilla violin plot; show mean and SD
-        - violin_median: show median and ste_median instead
+    - raw_method (str): see plot_Graph_CCS() docstring
     - emp_lv (int): if not None, this will be the CCS lv to plot
     - noise (dict of 3D nparr): noise['mean'][params][s,i,beta]
         it is a synonym for CCS_stat (see doc in RW_CCS_stat.py)
     - spl (int or list): what indices of sample to draw data from CCS_stat; -1 is the last sample
+    - n_agents (None or int): number of agents to be included
     - varb (bool): whether we draw negative beta (variable beta) or not
     - err_type (str): type to use as errorbar: 'std' or 'ste'
     - CCS_type (str): type of edge stat for CCS: 'mean' or 'std'
     - show_legend (bool): whether we show simulation parameters
-    - is_log (bool): if True then use log scale on x axis.
-    - last_row (bool): whether it is at last row
+    - is_log (bool): if True then use log scale on x axis
+    - has_xlabel/has_title (bool): whether we show xlabel/title
     - noise_ep (dict of 3D/4D nparr): numerical approximation using exposure theory
         for point estimation, it's 3D; for pdf and support, it's 4D obviously
         the CCS plot will not involve any simulation results if noise_ep is not None
@@ -783,44 +985,42 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
 
     if noise is not None:  # ax.text()
         styles_txt = dict(fontsize=11, horizontalalignment="right", transform=ax.transAxes)
-        if show_legend:
-            if emp_lv is None:  # only show walk length
+        topy, s = 0.94, 0.06
+        if show_legend:  # show agents per bin
+            if emp_lv is None:  # show walk length too
                 # n_agents = noise["mean"][params][spl, 1, 0]  # since all β have same group size, take 0
                 n_steps = noise["mean"][params][spl, 2, 0]  # ditto but w/ walk length
-                topy, s = 0.70, 0.06
                 # beta_type = "both" if varb else "constant"
-                # ax.text(0.5, topy, f"n_agents={n_agents:.0f}", **styles_txt)
-                ax.text(0.99, topy - 1 * s * 0, f"walk length={n_steps:.0f}", **styles_txt)
+                ax.text(0.99, topy - s * (n_level + 2), f"walk length={n_steps:.0f}", **styles_txt)
                 # if raw_method[-6:] == "median":  # show errorbar type to be ste_median
                 #     ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
                 # else: # identical: standard error (which is std of the statistic)
                 #     ax.text(0.5, topy - 2 * s, "errorbar=standard error", **styles_txt)
                 # ax.text(0.5, topy - 3 * s, f"CCS_type={CCS_type}", **styles_txt)
                 # ax.text(0.5, topy - 4 * s, f"beta_type={beta_type}", **styles_txt)
-            else:
-                n_per_bin = noise["raw"][params][spl, emp_lv - 1, 0, :].shape[0]
-                topy, s = 0.94, 0.06
-                ax.text(0.99, topy - s * 1, f"n={n_per_bin:.0f} per bin", **styles_txt)
-        if emp_lv is None:  # only show corr between one lv and the next
+            n_per_bin = noise["raw"][params][spl, 0, 0, :n_agents].shape[0]  # all emp_lv are same
+            ax.text(0.99, topy - s * (n_level + 3), f"n={n_per_bin:.0f} per bin", **styles_txt)
+        if emp_lv is None:  # only show corr between one CCS lv and the next
             for i in range(n_level - 1):
                 n_steps = noise["mean"][params][spl, 2, 0]  # ditto but w/ walk length
-                temp_shape = noise["raw"][params][spl, i:i+2, bs2, :].shape
+                temp_shape = noise["raw"][params][spl, i:i+2, bs2, :n_agents].shape
                 new_shape = (temp_shape[0], temp_shape[1] * temp_shape[2])
-                temp = np.reshape(noise["raw"][params][spl, i:i+2, bs2, :], new_shape)
+                temp = np.reshape(noise["raw"][params][spl, i:i+2, bs2, :n_agents], new_shape)
                 spearmanr = stats.spearmanr(temp, axis=1)
                 temp_var = f"$r_s$(lv{i+1},lv{i+2})={spearmanr.correlation:.3f} p={spearmanr.pvalue:.3f}"
-                topy, s = 0.94, 0.06
                 ax.text(0.99, topy - s * i, temp_var, **styles_txt)
         else:  # show Wilcoxon signed-rank tests (both per bin and global)
-            temp = noise["raw"][params][spl, emp_lv - 1, bs2, :]
+            temp = noise["raw"][params][spl, emp_lv - 1, bs2, :n_agents]
             temp_betas = noise["mean"][params][spl, 0, bs2]
             # global
             diff = np.ravel(temp) - 1  # compared to baseline of 1
-            pval = stats.wilcoxon(diff, alternative="greater").pvalue
-            ax.text(0.99, 0.94, f"Wilcoxon {pval_star(pval, star=False)}", **styles_txt)
+            result = stats.wilcoxon(diff, alternative="greater")
+            wstat, pval = result.statistic, result.pvalue
+            # ax.text(0.99, topy - s * 0, f"Wilcoxon={wstat:d} {pval_star(pval, star=False)}", **styles_txt)
+            ax.text(0.99, topy - s * 0, f"Wilcoxon {pval_star(pval, star=False)}", **styles_txt)
             pval2 = 1 - sum(diff > 0) / diff.shape[0]
-            # ax.text(0.99, 0.91, f"Proportion {pval_star(pval2, star=False)}", **styles_txt)
-            ax.text(0.99, 0.91, f"Proportion p={pval2:.3f}", **styles_txt)
+            # ax.text(0.99, topy - s * 1, f"Proportion {pval_star(pval2, star=False)}", **styles_txt)
+            ax.text(0.99, topy - s * 1, f"Proportion p={pval2:.3f}", **styles_txt)
             # per bin
             styles_txt.pop("transform", None)
             styles_txt.update(dict(horizontalalignment="center"))
@@ -828,7 +1028,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
             ax.text(6e-4, 0.924, f"Prop.", **styles_txt)
             for i in range(temp.shape[0]):  # loop over each bin (beta)
                 diff = temp[i, :] - 1  # compared to baseline of 1
-                pval = stats.wilcoxon(diff, alternative="greater").pvalue
+                result = stats.wilcoxon(diff, alternative="greater")
+                wstat, pval = result.statistic, result.pvalue
                 ax.text(temp_betas[i], 0.95, pval_star(pval, star=True), **styles_txt)
                 pval2 = 1 - sum(diff > 0) / diff.shape[0]
                 ax.text(temp_betas[i], 0.92, pval_star(pval2, star=True), **styles_txt)
@@ -854,40 +1055,29 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
             sty2.update(dict(markeredgecolor=cmap(i), markerfacecolor=cmap(i), ecolor=cmap(i)))
             # if show_legend:
             #     sty2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
-            if noise_ep is None:  # simulated results
-                kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
-                kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
-                kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
-            else:  # numerical approximation
-                kw_erb = dict(x=noise_ep["beta"])  # beta
-                kw_erb.update(dict(y=noise_ep["mean"][spl, i, :]))  # mean of CCS
-                kw_erb.update(dict(yerr=noise_ep["std"][spl, i, :]))  # std of CCS
-            if noise_ep is not None:  # ideal violin (overlaid): pdf
-                kw_temp = dict(color=cmap(i), alpha=0.27, linewidth=0)
-                bbdry = make_beta_boundry(noise_ep["beta"].shape[0], b=10)  # log-uniform
-                for b, beta in enumerate(bbdry[:, 0]):
-                    x0 = noise_ep["ps"][spl, i, b, :]  # min-max rescaled pdf
-                    x0 = x0 / TODO(x0, noise_ep["rs"][spl, i, b, :])  # TODO norm by a variable
-                    idx0, idx1 = 0, None
-                    for w in range(len(x0)):  # find the middle where p > 0
-                        if not np.isclose(x0[w], 0, rtol=0, atol=1e-10):
-                            idx0 = w
-                            break
-                    for w in range(len(x0)):  # find the middle where p > 0
-                        if not np.isclose(x0[-w - 1], 0, rtol=0, atol=1e-10):
-                            idx1 = -w - 1
-                            break
-                    idx1 = None if idx1 == -1 else idx1 + 1
-                    kw_temp["y"] = noise_ep["rs"][spl, i, b, idx0:idx1]
-                    x0 = x0[idx0:idx1]
-                    kw_temp["x1"] = bbdry[b, 1] + (1 - x0) * (bbdry[b, 0] - bbdry[b, 1])
-                    kw_temp["x2"] = bbdry[b, 0] + x0 * (bbdry[b, 2] - bbdry[b, 0])
-                    ax.fill_betweenx(**kw_temp)
-            elif raw_method is None:
+            if raw_method is None:
                 return 0
+            elif raw_method.startswith("box"):  # box plot
+                bdata = [noise["raw"][params][spl, i, b, :n_agents] for b in range(bs2.start, bs2.stop)]
+                positions = noise["mean"][params][spl, 0, bs2]  # beta
+                max_ECCS = [max(j) for j in bdata]
+                bbdry = make_beta_boundry(positions.shape[0], b=10)  # log-uniform
+                if is_log:  # create a dummy axis and plot boxes on that axis
+                    ax_bx = ax.twiny()  # instantiate a separate x-axis for equal spacing boxes
+                    # below position kwarg are crucial steps, turn exp to linear (log scale)
+                    widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
+                    kwargs = dict(widths=widths, manage_ticks=False, whis=(0, 100))  # full range whisker
+                    ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
+                    parts = ax_bx.boxplot(bdata, positions=log_b(positions, 10), **kwargs)
+                    ax_bx.xaxis.set_visible(False)  # hide twin axis, and doesn't take up space
+                if True: # match box colors to scatter
+                    for pc in parts.values():
+                        for line in pc:
+                            line.set_color(cmap(i))
+                            line.set_alpha(1)
             elif raw_method.startswith("violin"):  # stochastic violin (overlaid)
                 # TODO haven't implemented it in temp_a2()
-                data_vl = [noise["raw"][params][spl, i, b, :] for b in range(bs2.start, bs2.stop)]
+                data_vl = [noise["raw"][params][spl, i, b, :n_agents] for b in range(bs2.start, bs2.stop)]
                 pos_vl = noise["mean"][params][spl, 0, bs2]  # beta
                 pos_vl, widths = get_violin_pw(pos_vl, x_scale=x_scale)
                 kw_vl = dict(showmeans=False, showmedians=False, showextrema=False, widths=widths)
@@ -911,7 +1101,40 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
                 msg2 = "<raw_method>: currently only supports scatter(None)/violin('violin') plot"
                 raise ValueError(msg2)
 
-            ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
+            # simulated point estimate: mean/median + std/ste/ste_median
+            if not raw_method.startswith("box"):  # no need for this if box plot
+                kw_erb = dict(x=noise["mean"][params][spl, 0, bs2])
+                # calculate on the fly, instead of using noise["mean"][params][spl, 3 + i, bs2])
+                # kw_erb.update(dict(y=noise["mean"][params][spl, 3 + i, bs2]))
+                # kw_erb.update(dict(yerr=noise[err_type][params][spl, 3 + i, bs2]))
+                kw_erb.update(dict(y=np.mean(noise["raw"][params][spl, i, bs2, :n_agents], axis=-1)))
+                kw_erb.update(dict(yerr=np.std(noise["raw"][params][spl, i, bs2, :n_agents], axis=-1)))
+                ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
+            if noise_ep is not None:  # ideal violin (overlaid): pdf; numerical approximation (deprecated)
+                kw_erb = dict(x=noise_ep["beta"])  # beta
+                kw_erb.update(dict(y=noise_ep["mean"][spl, i, :]))  # mean of CCS
+                kw_erb.update(dict(yerr=noise_ep["std"][spl, i, :]))  # std of CCS
+                kw_temp = dict(color=cmap(i), alpha=0.27, linewidth=0)
+                bbdry = make_beta_boundry(noise_ep["beta"].shape[0], b=10)  # log-uniform
+                for b, beta in enumerate(bbdry[:, 0]):
+                    x0 = noise_ep["ps"][spl, i, b, :]  # min-max rescaled pdf
+                    x0 = x0 / TODO(x0, noise_ep["rs"][spl, i, b, :])  # TODO norm by a variable
+                    idx0, idx1 = 0, None
+                    for w in range(len(x0)):  # find the middle where p > 0
+                        if not np.isclose(x0[w], 0, rtol=0, atol=1e-10):
+                            idx0 = w
+                            break
+                    for w in range(len(x0)):  # find the middle where p > 0
+                        if not np.isclose(x0[-w - 1], 0, rtol=0, atol=1e-10):
+                            idx1 = -w - 1
+                            break
+                    idx1 = None if idx1 == -1 else idx1 + 1
+                    kw_temp["y"] = noise_ep["rs"][spl, i, b, idx0:idx1]
+                    x0 = x0[idx0:idx1]
+                    kw_temp["x1"] = bbdry[b, 1] + (1 - x0) * (bbdry[b, 0] - bbdry[b, 1])
+                    kw_temp["x2"] = bbdry[b, 0] + x0 * (bbdry[b, 2] - bbdry[b, 0])
+                    ax.fill_betweenx(**kw_temp)
+                ax.errorbar(**kw_erb, **sty2)  # python 3.5+ PEP 448 (Unpacking Generalizations)
     
     def temp_a2():  # draw total CCS: analytical, noise constant, noise dynamic
         sty1.update(dict(color=cmap(0)))
@@ -1022,8 +1245,9 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
         raise NotImplementedError(f"<CCS_plot_type>=\"{CCS_plot_type}\" is not implemented yet")
 
 
-    ax.set_title(title, fontsize=17)
-    if last_row:  # only have xlabel if bottom row
+    if has_title:
+        ax.set_title(title, fontsize=17)
+    if has_xlabel:
         ax.set_xlabel(xlabel, fontsize=11)
     ax.set_ylabel(ylabel, fontsize=11)
     if is_log:

@@ -7,10 +7,56 @@ Created: Monday, ‎March ‎22, ‎2021, ‏‎9:35:55 PM (EDT)
 
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0], ".."))
-from utility427.helper427 import set_dir427
-from utility427.math427 import step_funct, A2P, np
+from utility427.helper427 import set_dir427, mkdir_p
+from utility427.math427 import step_funct, A2P, np, npdivide0
 from utility427.plt427 import make_level_masks
 from utility427.Sierpinski427 import p2ten, p_ary, make_SierpinskiGraph427
+from utility427.sim_params427 import make_beta_mat  # for use in finite geometric only
+
+
+def get_geom_dist(n, beta):
+    """
+    it's adapted from Chris's belief_db_sequence2.m matlab code
+    NOTE we use python indexing convention throughout this function
+    NOTE it takes ~ 4 sec for n=7500, so we don't want to do it for every agent
+
+    Return
+    ------
+    - P (2D nparr): P[t,s] is prob that at time t=1,...,n-1,
+    (we start at second step because for counting edges, at least two nodes have to be visited)
+    mistaking node at time t-1 for node at time s where s = 0,1,...,t-1
+    how to use it:
+    we sample time index s with which we find the corresponding node to update mental count
+    s = self.RNG.choice(t, p=P[t-1, 0:t])
+    """
+    E = np.tile(range(n), [n, 1])
+    E = abs(E.T - E)
+    LowT = np.tril(np.ones((n, n)))
+    W = np.exp(-beta * E)
+    Z = np.sum(W * LowT, 1)[:, np.newaxis]  # col vec
+    P = W * LowT / np.tile(Z, n)  # repeat Z along col
+    return P
+
+
+def save_geom_dist(n, n_beta=10):
+    beta_mat = make_beta_mat(n_beta, 0, binned=False)
+    beta_arrs = beta_mat[:, 0]  # group beta; only one entry since n_agents per bin is 0
+    set_dir427()
+    prefix = "npy_files\\"
+    mkdir_p(prefix)
+    for i in range(len(beta_arrs)):
+        G = get_geom_dist(n, beta_arrs[i])
+        np.save(prefix + f"Geom_beta{n_beta:d}bins_len-{n:d}_idx-{i:d}.npy", G)
+
+
+def load_Geom(beta_idx, n, n_beta=10, folder_str="npy_files\\"):
+    set_dir427()
+    folder_str += f"Geom_beta{n_beta:d}bins_len-{n:d}_idx-{beta_idx:d}.npy"
+    try:
+        G = np.load(folder_str, allow_pickle=True)
+    except OSError:  # couldn't find the file
+        raise OSError("Oof, doesn't have finite geometric dist. npy file to work with")
+    return G
 
 
 def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
@@ -30,7 +76,7 @@ def load_Sier(regType, p, n, folder_str="npy_files\\", return_which="both"):
         'masks': returns 'masks'
     """
     set_dir427()
-    folder_str += "Sierpinski(regType={:d},p={:d},n={:d}).npy".format(regType, p, n)
+    folder_str += f"Sierpinski(regType={regType:d},p={p:d},n={n:d}).npy"
     try:
         Sierpinski_dict = np.load(folder_str, allow_pickle=True).tolist()  # convert nparr to dict
     except OSError:  # couldn't find the file
@@ -165,10 +211,111 @@ class GLsim:
         }
 
 
+class GLsim2:
+    """
+    main simulation object (discrete obviously, since we are working with a graph)
+
+    Main difference from GLsim is that this uses finite geometric distribution
+    but since creating one takes long time, only fix beta sequence is pre-created,
+    so it doesn't have var_beta or beta grouping functionalities anymore
+    Created: Monday, ‎February ‎21, ‎2022, ‏‎8:51:09 PM (EST)
+
+    Args
+    ----
+    regType, p, n: regularization type, power, level
+    seed: seed for np.random.default_rng()
+    steps_tot: total number of steps of the random walk
+    sample_period: every <num of time steps> to record the related matrices from RW
+    agentID: agent id for the current run (i.e., agent id within group which has same param)
+
+    Intermediary
+    ------------
+    self.beta_idx (int): idx for shuffling parameter in the vanilla Max-Entropy model
+        use finite geometric instead of previous infinite version
+        this does not work with kwargs['var_beta'], yet
+        beta will only be inferred from beta_idx
+    """
+
+    def __init__(self, seed, steps_tot, sample_period, agentID, beta_idx, regType, p, n, **kwargs):
+        self.seed = seed
+        self.steps_tot = steps_tot
+        self.sample_period = sample_period
+        self.agentID = agentID
+        self.beta_idx = beta_idx  # NOTE no actual beta involved, only idx
+        
+        self.P, _ = load_Sier(regType, p, n)  # load transition prob matrix
+        self.G = load_Geom(self.beta_idx, self.steps_tot)  # load finite Geometric dist.
+
+        # set up RNG
+        self.RNG = np.random.default_rng(seed=self.seed)
+        self.N = self.P.shape[0]  # get num of rows to be size of graph
+        # bunch of initializations
+        self.steps_now = 0  # initialize current num of steps traversed
+        self.node_now = self.RNG.integers(self.N)  # starting node drawn at random
+        self.path = np.full(self.steps_tot + 1, fill_value=-1, dtype=int)  # actual trajectory
+        self.path_me = np.full(self.steps_tot + 1, fill_value=-1, dtype=int)  # mental trajectory
+        self.path[self.steps_now] = self.node_now  # start at current node
+        self.path_me[self.steps_now] = self.node_now  # start at current node mentally as well
+        if self.sample_period > self.steps_tot:
+            raise ValueError("<sample_period> larger than <steps_tot>.")
+        self.n_sample = int(
+            np.floor(self.steps_tot / self.sample_period)
+        )  # tot num of samples (don't sample at the start)
+        self.steps_sample = (
+            np.arange(1, self.n_sample + 1) * self.sample_period
+        )  # time stamps at the time of sampling
+        self.count_ma = np.zeros((self.N, self.N), dtype=int)  # current count matrix
+        self.count_ma_me = np.zeros((self.N, self.N), dtype=int)  # current mental count matrix
+        self.counts = np.zeros(
+            (self.n_sample, self.N, self.N), dtype=int
+        )  # tensor: count_ma[i] is count matrix at sample i
+        self.counts_me = np.zeros(
+            (self.n_sample, self.N, self.N), dtype=int
+        )  # ditto except this is mental count
+
+    def walk(self):
+        """
+        walk one step
+        """
+        # get next node and walk onto it
+        self.node_now = self.RNG.choice(self.N, p=self.P[self.node_now, :])
+        self.steps_now += 1  # update num of steps walked
+        idx = self.steps_now - 1  # index of steps walked, starting from 0 instead of 1
+        # update path
+        self.path[self.steps_now] = self.node_now
+        # update mental path with shuffling (from actual path)
+        # the current one is as it is, shuffle is about last step
+        self.path_me[self.steps_now] = self.path[self.steps_now]
+        self.path_me[idx] = self.path[self.RNG.choice(idx + 1, p=self.G[idx, 0:(idx + 1)])]
+        # update count matrix and mental one too
+        self.count_ma[self.path[idx], self.path[self.steps_now]] += 1
+        self.count_ma_me[self.path_me[idx], self.path_me[self.steps_now]] += 1
+        if self.steps_now % self.sample_period == 0:  # record count if at sampling point
+            self.counts[self.steps_now // self.sample_period - 1, :, :] = self.count_ma
+            self.counts_me[self.steps_now // self.sample_period - 1, :, :] = self.count_ma_me
+
+    def walks(self):  # RW on full length
+        for _ in range(self.steps_tot):
+            self.walk()
+        return self.output()
+
+    def output(self):
+        # return a dictionary
+        return {
+            "path": self.path,
+            "path_me": self.path_me,
+            "counts_me": self.counts_me,
+            "steps_sample": self.steps_sample,
+        }
+
+
 def CCS(counts_me, regType, p, n, seed=0, analytic_comp=False):
     """simplified & modified heavily from CCS_analysis in CCS427.py
     This function finds CCS for given transition prob matrix
-    It calculates CCS for all P_hat in count_ma_me.
+    It calculates CCS for all P_hat in count_ma_me
+
+    2022.2.17 added new convention: when calculating CCS (ratio)
+    we set the result to be np.nan if denom is close to 0
     Args
     ----
     - counts_me (3D np.arr): simulated result
@@ -208,8 +355,8 @@ def CCS(counts_me, regType, p, n, seed=0, analytic_comp=False):
         # temp = -np.diff(mean_weights) # diff: all >0 if edge weights in finer level > coarser level
         # temp = np.exp(-np.diff(np.log(mean_weights))) # ratio: all >1 if edge weights in finer level > coarser level
         # print("DEBUG mean_weights: {} | std_weights: {}".format(mean_weights,std_weights))
-        temp1 = np.divide(mean_weights[:-1], mean_weights[1:])  # ditto, but more explicit
-        temp2 = np.divide(std_weights[:-1], std_weights[1:])
+        temp1 = npdivide0(mean_weights[:-1], mean_weights[1:], atol=1.e-14, filler=np.nan)  # ditto, but more explicit
+        temp2 = npdivide0(std_weights[:-1], std_weights[1:], atol=1.e-14, filler=np.nan)
         # print("DEBUG: {} with seed {}".format(mean_weights,seed))
         for l in range(0, lv - 1):
             CCS_arr[s, 0, l] = temp1[l]
@@ -393,16 +540,3 @@ def make_masks(regType, p, n, A_real, ccps_type):
 
     return masks
 
-
-""" DEBUG
-A, _ = load_Sier(1, 3, 3)
-A[A>0] = 1
-A = A.astype(int)
-temp = make_masks(1, 3, 3, A)
-
-temp2 = temp['lv2'].astype(int) + temp['lv3'].astype(int) + temp['lv4'].astype(int) + A
-print(f"DEBUG temp2:\n{temp2}")
-print(f"DEBUG temp:\n{temp['lv2'].astype(int)}")
-print(f"DEBUG temp:\n{temp['lv3'].astype(int)}")
-print(f"DEBUG temp:\n{temp['lv4'].astype(int)}")
-"""
