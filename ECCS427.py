@@ -38,7 +38,6 @@ def ECCS_main():
     for nback_idx in [0, 1]:  # 0 -> direct fit; 1 -> MLE
         for gof_thres in [None, 0, 0.80, 0.85, 0.90, 0.95]:
             get_process_beta_2src(nback_idx=nback_idx, gof_thres=gof_thres, **kwargs)
-            pass
 
 
 
@@ -398,9 +397,9 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
                 ax_bx = ax.twiny()  # instantiate a separate x-axis for equal spacing boxes
                 # below position kwarg are crucial steps, turn exp to linear (log scale)
                 widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
-                kwargs = dict(widths=widths, manage_ticks=False, whis=(0, 100))  # full range whisker
+                kwargs = dict(widths=widths, manage_ticks=False, whis=(2.5, 97.5))  # 95% range whisker
                 ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
-                parts = ax_bx.boxplot(bdata, positions=log_b(positions, 10), **kwargs)
+                parts = ax_bx.boxplot(bdata, positions=log_b(positions, 10), showfliers=False, **kwargs)
                 ax_bx.xaxis.set_visible(False)  # hide twin axis, and doesn't take up space
             else:
                 parts = ax.boxplot(bdata, positions=positions)  # incomplete but unused
@@ -725,7 +724,7 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
         cond_gof = True if gof_thres is None else (beta_nback[k][2 + nback_idx] >= gof_thres)
         # if 0 <= beta_sier[k] <= 6 and 0 <= beta_nback[k][nback_idx] <= 6 and cond_gof:
         # if 0 < beta_sier[k] < 1e3 and 0 < beta_nback[k][nback_idx] < 1e3 and cond_gof:
-        if 0 < beta_sier[k] < 1e3 and 0 <= beta_nback[k][nback_idx] <= 1e3 and cond_gof:  # threshold based on network beta
+        if 0 <= beta_sier[k] <= 1e3 and 0 <= beta_nback[k][nback_idx] <= 1e3 and cond_gof:
             key_set.add(k)
     # print(f"DEBUG beta ids that remain: {key_set}")
     beta_arr_filt = np.zeros((len(key_set), 2), dtype=float)
@@ -739,7 +738,7 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     ander_sier = stats.anderson(beta_arr_filt[:, 0], dist="norm")
     ander_nback = stats.anderson(beta_arr_filt[:, 1], dist="norm")
     text_gof1 = "all" if gof_thres is None else f"{gof_thres:.2f}"
-    print(f"\n nback {txt_beta_arr} β; gof thresholded at {text_gof1}")
+    print(f"\n nback {txt_beta_arr} β; gof thresholded at {text_gof1} | n={beta_arr_filt.shape[0]}")
     print(f"network β:{ander_sier.statistic:.3g}\n", ander_sier.critical_values, ander_sier.significance_level)
     print(f"nback β:{ander_nback.statistic:.3g}\n", ander_nback.critical_values, ander_nback.significance_level, end="\n")
 
