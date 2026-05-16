@@ -3,7 +3,11 @@ This is to post-process the data from completed jobs in signac database
 Specifically, those whose CCS_done(job) is True
 what it does is simply find basic statistics for the CCS:
 mean, standard deviation, standard error (std/sqrt(sample size))
-Created: Thursday, March 25, 2021, 10:30:09 AM (EDT)
+
+difference between this and RW_CCS_stat.py:
+this is for alternative model: 2-point error distribution
+
+Created: Sunday, December 17, 2023, 7:56:20 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -38,6 +42,7 @@ is_operation = True  # whether CCS_compute is done as @operation in signac
 sub_folder_name = get_params("params")["key_class"] # folder inside output folder to store all CCS_stat
 save_raw = True  # whether save all agents' CCS; this makes the .np around 500kb instead of 30kb
 CCS_key = "CCS"  # options: CCS, CCPS, CCPS2
+SEEDS = [427, 428, 429, 430]
 
 KEYS = ["mean", "ste", "std", "median", "ste_median"]  # keys of CCS_stat
 if save_raw:
@@ -49,7 +54,7 @@ def print_progress(counter):
         print(f"Progresss: {counter}")
 
 
-def main_CCS_stat():
+def main_CCS_stat(seed):
     # np.seterr(all='raise') # set all runtime warning to raise errors
     # load parameters from json
     temp = get_params()
@@ -74,42 +79,45 @@ def main_CCS_stat():
         for regType, p, n in params["pd"]:
             # if regType == 2:  # this is never used in CCS, CCPS, or CCTS
             #     continue  # skip the rest and go back to the current loop of regType, p, n
-            job_criteria = {
-                "key_class": params["key_class"],
-                "beta_class": params["beta_classes"][i],
-                "regType": regType,
-                "p": p,
-                "n": n,
-                "n_agents": params["n_agents"],
-            }
             nparr = np.zeros((n_sample, 3 + n - 1, len(params["beta_arrs"][i])))
             stat_arr = np.zeros((n_sample, n - 1, len(params["beta_arrs"][i]), params["n_agents"]))
-            for job in project.find_jobs(job_criteria):
-                counter += 1
-                print_progress(counter)
-                nparr[:, 0, job.sp.beta_idx] = job.sp.beta_grp  # not the actual beta used in sim
-                nparr[:, 1, job.sp.beta_idx] = params["n_agents"]
-                with job.data:
-                    nparr[:, 2, job.sp.beta_idx] = job.data["GLsim_data"]["steps_sample"][:]
-                    if is_operation:
-                        temp = job.data[CCS_key][:]
-                    else:
-                        # CCS_compute here (not as @operation)
-                        kw_CCS = dict(counts_me=job.data["GLsim_data"]["counts_me"][:])
-                        kw_CCS.update(dict(regType=job.sp.regType, p=job.sp.p, n=job.sp.n))
-                        if CCS_key == "CCS":
-                            temp = CCS(**kw_CCS, seed=job.sp.seed)
-                        elif CCS_key == "CCPS":
-                            temp = CCPS(**kw_CCS, ccps_type=1)
-                        elif CCS_key == "CCPS2":
-                            temp = CCPS(**kw_CCS, ccps_type=2)
-
+            for w_i in range(10):
+                job_criteria = {
+                    "key_class": params["key_class"],
+                    "beta_class": params["beta_classes"][i],
+                    "regType": regType,
+                    "p": p,
+                    "n": n,
+                    "n_agents": params["n_agents"],
+                    "w_idx": w_i,
+                    "seed_param": seed,
+                }
+                for job in project.find_jobs(job_criteria):
+                    counter += 1
+                    print_progress(counter)
+                    nparr[:, 0, job.sp.w_idx] = job.sp.beta_grp  # not the actual beta used in sim
+                    nparr[:, 1, job.sp.w_idx] = params["n_agents"]
+                    with job.data:
+                        nparr[:, 2, job.sp.w_idx] = job.data["GLsim_data"]["steps_sample"][:]
+                        if is_operation:
+                            temp = job.data[CCS_key][:]
                         else:
-                            raise NotImplementedError("currently only CCS and CCPS are valid")
-                for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
-                    stat_arr[:, l, job.sp.beta_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
-                    # print('DEBUG: regType={},p={},n={},agentID={},beta_idx={},seed={}'\
-                    #       .format(regType, p, n, job.sp.agentID, job.sp.beta_idx, job.sp.seed))
+                            # CCS_compute here (not as @operation)
+                            kw_CCS = dict(counts_me=job.data["GLsim_data"]["counts_me"][:])
+                            kw_CCS.update(dict(regType=job.sp.regType, p=job.sp.p, n=job.sp.n))
+                            if CCS_key == "CCS":
+                                temp = CCS(**kw_CCS, seed=job.sp.seed)
+                            elif CCS_key == "CCPS":
+                                temp = CCPS(**kw_CCS, ccps_type=1)
+                            elif CCS_key == "CCPS2":
+                                temp = CCPS(**kw_CCS, ccps_type=2)
+
+                            else:
+                                raise NotImplementedError("currently only CCS and CCPS are valid")
+                    for l in range(n - 1):  # CCS level index; only up to n-2 (i.e., CCS level n-1)
+                        stat_arr[:, l, job.sp.w_idx, job.sp.agentID] = temp[:, CCS_type_slice, l]
+                        # print('DEBUG: regType={},p={},n={},agentID={},w_idx={},seed={}'\
+                        #       .format(regType, p, n, job.sp.agentID, job.sp.w_idx, job.sp.seed))
             if save_raw:
                 CCS_stat["raw"][(regType, p, n)] = stat_arr
 
@@ -132,9 +140,9 @@ def main_CCS_stat():
             # CCS_stat["mad"][(regType, p, n)] = nparr.copy()
 
         print(f"loop {i}: {params['beta_classes'][i]} has {counter} jobs")
-        fname = set_dir427() + f"\\output\\{sub_folder_name}\\"
+        fname = set_dir427() + f"\\output\\{sub_folder_name} (alt)\\"
         mkdir_p(fname)
-        fname += f"{CCS_key}_stat_{CCS_type}_{params['key_class']}_{params['beta_classes'][i]}"
+        fname += f"{seed}-{CCS_key}_stat_{CCS_type}_{params['key_class']}_{params['beta_classes'][i]}"
         fname += f"_{params['n_agents']:d}"
         np.save(fname, CCS_stat)
 
@@ -142,4 +150,5 @@ def main_CCS_stat():
 
 
 if __name__ == "__main__":
-    main_CCS_stat()
+    for s in SEEDS:
+        main_CCS_stat(s)

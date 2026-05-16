@@ -2,7 +2,7 @@
 This is to add state points to signac database.
 It defines ranges of params over which one wants to sweep.
 
-Created: Tuesday, ‎March ‎23, ‎2021, ‏‎6:49:54 PM (EDT)
+Created: Tuesday, March 23, 2021, 6:49:54 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -55,7 +55,8 @@ for i in range(len(params["beta_classes"])):
                     {
                         "key_class": params["key_class"],
                         "beta_class": params["beta_classes"][i],
-                        "seed": seed,
+                        "seed": seed,  # this is different even when params["SEED"] is identical
+                        "seed_param": params["SEED"],  # 427, 428, etc.
                         "agentID": agentID,
                         "n_agents": params["n_agents"],
                         "steps_tot": params["steps_tot"],
@@ -65,7 +66,8 @@ for i in range(len(params["beta_classes"])):
                         "n": n,
                         "beta_grp": params["beta_arrs"][i][beta_idx],  # beta shared in grp
                         "beta": params["beta_acts"][i][beta_idx, agentID],  # beta used in sim
-                        "beta_idx": beta_idx,  # group beta idx; actual beta idx = agentID
+                        # change below key from beta_idx to w_idx for alt model
+                        "w_idx": beta_idx,  # group beta idx; actual beta idx = agentID
                         "var_beta": params["var_betas"][i],
                         "max_betas": get_max_betas(max_beta_dict, regType, p, n, reverse=reverse),
                     }

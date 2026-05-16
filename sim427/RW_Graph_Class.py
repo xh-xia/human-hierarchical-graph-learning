@@ -1,7 +1,7 @@
 """
 This is library of classes for running Graph Learning (GL) simulations.
 It has only basic functionalities for now.
-Created: Monday, ‎March ‎22, ‎2021, ‏‎9:35:55 PM (EDT)
+Created: Monday, March 22, 2021, 9:35:55 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -218,7 +218,7 @@ class GLsim2:
     Main difference from GLsim is that this uses finite geometric distribution
     but since creating one takes long time, only fix beta sequence is pre-created,
     so it doesn't have var_beta or beta grouping functionalities anymore
-    Created: Monday, ‎February ‎21, ‎2022, ‏‎8:51:09 PM (EST)
+    Created: Monday, February 21, 2022, 8:51:09 PM (EST)
 
     Args
     ----
@@ -287,6 +287,121 @@ class GLsim2:
         # the current one is as it is, shuffle is about last step
         self.path_me[self.steps_now] = self.path[self.steps_now]
         self.path_me[idx] = self.path[self.RNG.choice(idx + 1, p=self.G[idx, 0:(idx + 1)])]
+        # update count matrix and mental one too
+        self.count_ma[self.path[idx], self.path[self.steps_now]] += 1
+        self.count_ma_me[self.path_me[idx], self.path_me[self.steps_now]] += 1
+        if self.steps_now % self.sample_period == 0:  # record count if at sampling point
+            self.counts[self.steps_now // self.sample_period - 1, :, :] = self.count_ma
+            self.counts_me[self.steps_now // self.sample_period - 1, :, :] = self.count_ma_me
+
+    def walks(self):  # RW on full length
+        for _ in range(self.steps_tot):
+            self.walk()
+        return self.output()
+
+    def output(self):
+        # return a dictionary
+        return {
+            "path": self.path,
+            "path_me": self.path_me,
+            "counts_me": self.counts_me,
+            "steps_sample": self.steps_sample,
+        }
+
+
+class GLsim3:
+    """
+    main simulation object (discrete obviously, since we are working with a graph)
+
+    this is for the alternative model: two-point distribution on correct and most visited node
+
+    for the purposes of testing and revision, I used the default values:
+        error rate r = 0.74 (roughly beta=0.3)
+        window size w = [2, 3, 5, 8, 13, 21, 34, 55, 89, 144] (1 means 1 node before the correct one)
+        (window size has 10 to match number of beta we considered,
+        and it's a part of the Fibonacchi sequence because
+        1. I want good coverage of smaller sizes
+        2. but also some way larger sizes in case small ones can't learn the coarser hierarchy)
+    Created: Wednesday, December 13, 2023, 7:33:11 PM (EST)
+
+    Args
+    ----
+    regType, p, n: regularization type, power, level
+    seed: seed for np.random.default_rng()
+    steps_tot: total number of steps of the random walk
+    sample_period: every <num of time steps> to record the related matrices from RW
+    agentID: agent id for the current run (i.e., agent id within group which has same param)
+
+    Intermediary
+    ------------
+    self.w_arr (arr): the index (i.e., w_idx) is used on this arr of actual window sizes
+    """
+
+    def __init__(self, seed, steps_tot, sample_period, agentID, w_idx, regType, p, n, **kwargs):
+        self.seed = seed
+        self.steps_tot = steps_tot
+        self.sample_period = sample_period
+        self.agentID = agentID
+        self.w_idx = w_idx
+
+        self.P, _ = load_Sier(regType, p, n)  # load transition prob matrix
+        # if we want to change, we just need to specify in kwargs,
+        # otherwise below are default values
+        self.r = 0.74
+        self.w_arr = np.array([2, 3, 5, 8, 13, 21, 34, 55, 89, 144])  # window size arr
+        self.w = self.w_arr[self.w_idx]
+        # below (until walk(self)) is the same as GLsim2
+
+        # set up RNG
+        self.RNG = np.random.default_rng(seed=self.seed)
+        self.N = self.P.shape[0]  # get num of rows to be size of graph
+        # bunch of initializations
+        self.steps_now = 0  # initialize current num of steps traversed
+        self.node_now = self.RNG.integers(self.N)  # starting node drawn at random
+        self.path = np.full(self.steps_tot + 1, fill_value=-1, dtype=int)  # actual trajectory
+        self.path_me = np.full(self.steps_tot + 1, fill_value=-1, dtype=int)  # mental trajectory
+        self.path[self.steps_now] = self.node_now  # start at current node
+        self.path_me[self.steps_now] = self.node_now  # start at current node mentally as well
+        if self.sample_period > self.steps_tot:
+            raise ValueError("<sample_period> larger than <steps_tot>.")
+        self.n_sample = int(
+            np.floor(self.steps_tot / self.sample_period)
+        )  # tot num of samples (don't sample at the start)
+        self.steps_sample = (
+            np.arange(1, self.n_sample + 1) * self.sample_period
+        )  # time stamps at the time of sampling
+        self.count_ma = np.zeros((self.N, self.N), dtype=int)  # current count matrix
+        self.count_ma_me = np.zeros((self.N, self.N), dtype=int)  # current mental count matrix
+        self.counts = np.zeros(
+            (self.n_sample, self.N, self.N), dtype=int
+        )  # tensor: count_ma[i] is count matrix at sample i
+        self.counts_me = np.zeros(
+            (self.n_sample, self.N, self.N), dtype=int
+        )  # ditto except this is mental count
+
+    def walk(self):
+        """
+        walk one step
+        """
+        # get next node and walk onto it
+        self.node_now = self.RNG.choice(self.N, p=self.P[self.node_now, :])
+        self.steps_now += 1  # update num of steps walked
+        idx = self.steps_now - 1  # index of steps walked, starting from 0 instead of 1
+        # update path
+        self.path[self.steps_now] = self.node_now
+        # update mental path with shuffling (from actual path)
+        # the current one is as it is, shuffle is about last step
+        self.path_me[self.steps_now] = self.path[self.steps_now]
+        # find most visited node
+        if self.w < 3:  # window size of 1 or 2; it includes the correct node, thus min=1
+            idx_err = idx  # the correct node, so it's always correct, no errors made
+        else:
+            temp_mv = self.path[max(0, self.steps_now - self.w) : self.steps_now]
+            temp_mode = np.unique(temp_mv[::-1], return_index=True, return_counts=True)
+            temp_idx_max = np.flatnonzero(temp_mode[2] == np.max(temp_mode[2]))  # most visited
+            temp_idx_recent = np.min(temp_mode[1][temp_idx_max])  # most recent (idx from right of temp_mv)
+            idx_err = idx - temp_idx_recent
+        self.path_me[idx] = self.path[self.RNG.choice([idx_err, idx], p=[self.r, 1 - self.r])]
         # update count matrix and mental one too
         self.count_ma[self.path[idx], self.path[self.steps_now]] += 1
         self.count_ma_me[self.path_me[idx], self.path_me[self.steps_now]] += 1

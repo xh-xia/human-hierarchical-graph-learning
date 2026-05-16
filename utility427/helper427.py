@@ -1,7 +1,7 @@
 """
 generic helper functions
 
-Created: Thursday, ‎March ‎25, ‎2021, ‏‎6:25:10 PM (EDT)
+Created: Thursday, March 25, 2021, 6:25:10 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -200,4 +200,3 @@ def print427(txt, var=None):
     print(f"\n=========={txt}==========\n")
     if var is not None:
         print(var)
-

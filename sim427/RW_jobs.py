@@ -1,6 +1,6 @@
 """
 This is to communicate between the simulator (RW_Graph_Class) and signac
-Created: Wednesday, ‎March ‎24, ‎2021, ‏‎2:49:32 PM (EDT)
+Created: Wednesday, March 24, 2021, 2:49:32 PM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -69,6 +69,13 @@ def regType_is_0_1_3(job):
 @Project.post(RW_done)
 def RW_run(job):
     GLsim_object = RW_Graph_Class.GLsim2(**job.sp)
+    job.data["GLsim_data"] = GLsim_object.walks()
+
+
+@Project.operation
+@Project.post(RW_done)
+def RW_run_alt(job):  # alt model: two-point error distribution
+    GLsim_object = RW_Graph_Class.GLsim3(**job.sp)
     job.data["GLsim_data"] = GLsim_object.walks()
 
 

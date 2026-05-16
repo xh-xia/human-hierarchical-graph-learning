@@ -3,7 +3,19 @@ CCS visualizations.
 
 not really refactored... sorry. XD
 
-Created: Monday, April 5, 2021, 3:59:47 PM (EDT; maybe earlier actually)
+this is for alternative model: 2-point error distribution
+changes:
+npy_sub_path = f"{sub_fo_name} (alt)  # added " (alt)"; this is for CCS stats .npy file
+xlabel = r"Window Size $w$"  # x label from memory error to windiw size
+ax_CCS(x=[2, 3, 5, 8, 13, 21, 34, 55, 89, 144]) this is the new x instead of beta_arr
+ax.plot(x, CCS_arr[:, CCS_type_slice, i], **sty1)  # commented out, because we don't have analytical curve for alt model
+temp_b1() function run codes (2 lines) are commented out because again no analytical curve
+positions = np.array([2, 3, 5, 8, 13, 21, 34, 55, 89, 144])  # this is the x coordinates for the center of window size (previously beta)
+kwargs = dict(widths=widths/2.2,  # half the width because otherwise the box plot box widths are too big and overlapping each other, making it hard to see
+then I included some seed-related changes because I ran with different seeds
+and also added a floating invisible dot for legends, and enlarged the x-range to show all boxes
+
+Created: Sunday, December 17, 2023, 8:04:57 PM (EST)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -23,6 +35,8 @@ from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427
 from utility427.sim_params427 import make_sim_params, make_beta_boundry
 
+
+SEEDS = [427, 428, 429, 430]  # 427 is the default, I added 428-430 later
 FIGNUM = 5  # which figure to generate: (filename) 2,3,4,5 (supp) 6,7
 # corresponding paper figure numbers are shown in the code comments below
 # for supplement, I used IS_SUPP as a quick and dirty fix
@@ -136,7 +150,7 @@ def plot_main(beta_class, sub_fo_name, CCS_type, key_class, n_agents, hierDict,
     DD (dict): a data dict created only to be used in graphing (i.e., plot_Graph_CCS())
         most results from numerical calculations are put in DD
     """
-    npy_sub_path = f"{sub_fo_name}\\CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
+    npy_sub_path = f"{sub_fo_name} (alt)\\{SEED}-CCS_stat_{CCS_type}_{key_class}_{beta_class}_{n_agents}"
     if mode427 == 0:  # analytical only
         CCS_stat = None
     else:
@@ -574,7 +588,7 @@ def plot_Graph_CCS(
         where <whatnot> is defined in saveNclose427()
     - mode427 (int):
         - 0: analytical curve only
-        - 1: analytical + simulation
+        - 1: analytical + simulation (for 2-point error distribution alt, remove analytical)
     - fig_num (int):
         figure index for the paper; for manual tweaks
 
@@ -668,7 +682,7 @@ def plot_Graph_CCS(
     else:
         axes["CCS"] = [None] * (n_level)
 
-    fname = f"Fig{FIGNUM}.CCS_{key}"
+    fname = f"{SEED}-Fig{FIGNUM}.CCS_{key}"
     if CCS_stat is not None:
         # both group size and walk length are the same across all beta
         if regCCS!=2:
@@ -811,7 +825,7 @@ def plot_Graph_CCS(
                 params = DD_keys[0]
                 temp_emp_lv = row + 1
 
-                kw2 = dict(ax=axes[f"CCS_row{row}"][i], x=beta_arr)
+                kw2 = dict(ax=axes[f"CCS_row{row}"][i], x=[2, 3, 5, 8, 13, 21, 34, 55, 89, 144])
                 kw2.update(dict(CCS_plot_type=CCS_plot_type))
                 kw2.update(dict(params=params, key=key))
                 kw2.update(dict(CCS_arr=DD[params]["CCS_arr"], noise=CCS_stat))
@@ -1227,7 +1241,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
     """
     # set up beta range (analytical) for plot
     if is_log:
-        x_range = (min(x) * 1.00, max(x) * 1.00)
+        x_range = (min(x) * 0.5, max(x) * 1.5)
         x_scale = 10  # base used for get_violin_pw(); same as when beta was first initialized
     else:
         delta = (max(x) - min(x)) * 0.05
@@ -1249,7 +1263,7 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
     else:
         CCS_type_slice = 1
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
-    xlabel = r"Memory Error Parameter $\beta$"
+    xlabel = r"Window Size $w$"
     ylabel = "CCS"
     if CCS_plot_type == "sum":
         ylabel = "Sum of CCS Across Levels"
@@ -1331,7 +1345,8 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
         sty1.update(dict(color=cmap(i)))
         if show_legend:
             sty1.update(dict(label=f"lv{i+1}/lv{i+2}"))
-        ax.plot(x, CCS_arr[:, CCS_type_slice, i], **sty1)  # plot analytical curve
+            ax.plot(1, 2, **sty1)  # won't show up in plot; simply to display legend
+        # ax.plot(x, CCS_arr[:, CCS_type_slice, i], **sty1)  # plot analytical curve
         if noise is not None:  # put scatter points
             if varb:  # plot horizontal line; only plot one dynamic beta; draw it first
                 kw1 = dict(color=cmap(i), zorder=1)
@@ -1350,14 +1365,14 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
                 return 0
             elif raw_method.startswith("box"):  # box plot
                 bdata = [noise["raw"][params][spl, i, b, :n_agents] for b in range(bs2.start, bs2.stop)]
-                positions = noise["mean"][params][spl, 0, bs2]  # beta
+                positions = np.array([2, 3, 5, 8, 13, 21, 34, 55, 89, 144])  # beta
                 max_ECCS = [max(j) for j in bdata]
                 bbdry = make_beta_boundry(positions.shape[0], b=10)  # log-uniform
                 if is_log:  # create a dummy axis and plot boxes on that axis
                     ax_bx = ax.twiny()  # instantiate a separate x-axis for equal spacing boxes
                     # below position kwarg are crucial steps, turn exp to linear (log scale)
                     widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
-                    kwargs = dict(widths=widths, manage_ticks=False, whis=(2.5, 97.5), zorder=1)  # 95% range whisker
+                    kwargs = dict(widths=widths/2.2, manage_ticks=False, whis=(2.5, 97.5), zorder=1)  # 95% range whisker
                     ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
                     parts = ax_bx.boxplot(bdata, positions=log_b(positions, 10), showfliers=False, **kwargs)
                     ax_bx.xaxis.set_visible(False)  # hide twin axis, and doesn't take up space
@@ -1481,14 +1496,14 @@ def ax_CCS(ax, x, CCS_arr, params, key, CCS_plot_type="CCS", raw_method=None, em
     if emp_lv is not None:
         xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
         temp_a1(emp_lv - 1)  # -1 because this is level not idx
-        temp_b1(emp_lv - 1)  # put peak val on plot
+        # temp_b1(emp_lv - 1)  # put peak val on plot
         ax.set_ylim((0.9, 1.63))
         ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
     elif CCS_plot_type == "CCS":  # plot vanilla CCS graph
         xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
         for i in range(n_level):  # n_level is always n-1; see earlier code for why this is true
             temp_a1(i)
-            temp_b1(i)  # put peak val on plot
+            # temp_b1(i)  # put peak val on plot
 
         if key in ["n", "reg_n"]:
             ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max CCS is <1.3
@@ -1688,4 +1703,5 @@ def ax_Graph(ax, axcb, fig, params, nodeList, GTDict,
 
 
 if __name__ == "__main__":
-    main_Sierpinski427()
+    for SEED in SEEDS:
+        main_Sierpinski427()

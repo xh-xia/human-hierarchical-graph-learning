@@ -317,7 +317,7 @@ def pval_star(pval, star=True):
         return "" + "*" * (pval < 0.05) + "*" * (pval < 0.01) + "*" * (pval < 0.001) + "*" * (pval < 0.0001)
     else:
         if pval >= 0.05:
-            return "p>=0.05"
+            return "p≥0.05"
         elif 0.01 <= pval < 0.05:
             return "p<0.05"
         elif 0.001 <= pval < 0.01:

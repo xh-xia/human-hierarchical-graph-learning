@@ -1,6 +1,6 @@
 """
-Empirical CCS plots (including histogram and others for experimental data)
-Created: Wednesday, ‎November ‎24, ‎2021, ‏‎2:59:27 PM (EST)
+Empirical CCS: paper Fig.6
+Created: Wednesday, November 24, 2021, 2:59:27 PM (EST)
 @author: Xiaohuan (Pixel) X.
 """
 import os, json
@@ -16,24 +16,35 @@ from utility427.plt427 import load_CCS_stat, save_masks
 from utility427.Sierpinski427 import make_Sierpinski427, p_ary, make_SierpinskiGraph427, W_CG
 from utility427.sim_params427 import make_beta_boundry
 
-from CCS427v2 import ax_CCS, make_A_hat_beta
+FIGNUM = 6  # which figure to generate; 6
 
+FS_TICKLAB = 12
+FS_LAB = 14
+FS_MAIN = 17
+FS_TICKLEN = 5.5
+FS_TICKWID = 1.7
+FS_MINOR_TICKLEN = 3
+FS_MINOR_TICKWID = 1.4
+
+TICK_PARAMS = dict(labelsize=FS_TICKLAB, length=FS_TICKLEN, width=FS_TICKWID)
+TICK_PARAMS_MINOR = dict(length=FS_MINOR_TICKLEN, width=FS_MINOR_TICKWID)
+
+ALT=False  # directly used inside ECCS2()
 
 def ECCS_main():
     cwd = set_dir427()  # script dir
-    colors = colors_selector(str="5-class Greens")
+    colors = colors_selector(str="7-class Greens")
     ECCS_type = 2
     yrange = (-3, 6) if ECCS_type == 1 else None
-    # yrange = (-3, 6)
-    # yrange = None
 
-    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", plot_data=[None], ECCS_type=ECCS_type)
+    MEM = get_ECCS_from_data(cwd=cwd + "/input/empirical_data/", ECCS_type=ECCS_type)
     beta_arr = np.geomspace(0.0001, 10, 400)  # for analytical curve only
     kwargs = dict(sub_folder_name="ECCS", colors=colors, ECCS_type=ECCS_type)
     kwargs.update(dict(yrange=yrange, boxed=True))
     plot_hists_ECCS(MEM, (3, 3, 3), **kwargs)
 
     return 0
+
     kwargs = dict(cwd=cwd + "/input/empirical_data/", )
     for nback_idx in [0, 1]:  # 0 -> direct fit; 1 -> MLE
         for gof_thres in [None, 0, 0.80, 0.85, 0.90, 0.95]:
@@ -110,21 +121,21 @@ def plot_hists_ECCS(
         arr = [v[k] for v in MEM.values()]
         ax_hist(axes["Hists"][i], arr, keys[k], density=False, logscale=i==2)
 
-    kw_axl = dict(fontsize=17, horizontalalignment="center")
-    text_labels = ["A", "B", "C", "D", "E"]  # panel label list
-    label_rpos = [-0.5] * 5  # relative x position
+    kw_axl = dict(fontsize=FS_MAIN, horizontalalignment="center")
+    text_labels = ["(a)", "(b)", "(c)", "(d)", "(e)"]  # panel label list
+    label_rposx = [-0.3] * 5  # relative x position
+    label_rposy = [1.04] * 5  # relative y position
     for i in range(len(text_labels)):
         # axlabel = fig.add_subplot(gs[0:3, 2*i])
         axes["labels"][i].set_frame_on(False)
         axes["labels"][i].set_axis_off()  # same as ax.axis('off')
         kw_axl.update(dict(transform=axes["labels"][i].transAxes))
-        axes["labels"][i].text(label_rpos[i], 1.09, f"{text_labels[i]}", **kw_axl)
+        axes["labels"][i].text(label_rposx[i], label_rposy[i], f"{text_labels[i]}", **kw_axl)
 
-    temp_txt = "ECCS_full" if yrange is None else f"ECCS_{yrange[0]:d}to{yrange[1]:d}"
-    fname = f"histECCS{ECCS_type}_{temp_txt}"
+    temp_txt = "full" if yrange is None else f"{yrange[0]:d}to{yrange[1]:d}"
+    fname = f"Fig{FIGNUM}.histECCS{ECCS_type}_{temp_txt}"
     ECCS_arr, num_exc = make_ECCS_arr(MEM, (1e-4, 999), yrange, ECCS_type=ECCS_type)
     box_dict = sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=2, boxed=boxed)
-    sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=2, boxed=boxed)
     spearmanr = stats.spearmanr(ECCS_arr[:, [1, 2]], axis=0)
     temp_var = f"corr={spearmanr.correlation:.3f} pval={spearmanr.pvalue:.5f}"
     print427(f"corr: ECCS{ECCS_type} lv1 to lv2", var=temp_var)
@@ -177,8 +188,8 @@ def sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=None, boxed=False):
         result = stats.ttest_1samp(diff, popmean=0, **kwargs)
         result2 = stats.wilcoxon(diff, **kwargs2)
         temp_txt = f"lv={i + 1} | diff mean = {the_mean:.2f}"
-        temp_txt += f" | (t-test) pval = {result.pvalue:.4f}"
-        temp_txt += f" | (Wilcoxon) pval = {result2.pvalue:.4f}"
+        temp_txt += f" | (t-test) stat={result.statistic:.2f} pval={result.pvalue:.4f}"
+        temp_txt += f" | (Wilcoxon) stat={result2.statistic:.2f} pval={result2.pvalue:.4f}"
         print(temp_txt)
 
     print427("ECCS mean/median: one lv to coarser lv", var=f"n={n_sample} | removed {num_exc} outliers")
@@ -188,8 +199,8 @@ def sig_tests_ECCS(ECCS_arr, num_exc, ccs_lv=None, boxed=False):
         result = stats.ttest_1samp(diff, popmean=0, **kwargs)
         result2 = stats.wilcoxon(diff, **kwargs2)
         temp_txt = f"lv={i + 1}-lv={i + 2} | diff mean = {the_mean:.2f}"
-        temp_txt += f" | (t-test) pval = {result.pvalue:.4f}"
-        temp_txt += f" | (Wilcoxon) pval = {result2.pvalue:.4f}"
+        temp_txt += f" | (t-test) stat={result.statistic:.2f} pval={result.pvalue:.4f}"
+        temp_txt += f" | (Wilcoxon) stat={result2.statistic:.2f} pval={result2.pvalue:.4f}"
         print(temp_txt)
 
     if boxed:
@@ -293,9 +304,11 @@ def ax_hist(ax, arr, xlabel, density=False, logscale=False):
             kwargs.update(dict(bins=np.linspace(xlim[0],xlim[1],20)))
         ax.set_xlim(xlim)
     ax.hist(arr, **kwargs)
-    # ax.set_title(title, fontsize=17)
-    ax.set_xlabel(xlabel, fontsize=11)
-    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax.transAxes)
+    # ax.set_title(title, fontsize=FS_MAIN)
+    ax.set_xlabel(xlabel, fontsize=FS_LAB)
+    ax.tick_params(axis="both", which="major", **TICK_PARAMS)
+    ax.tick_params(axis="both", which="minor", **TICK_PARAMS_MINOR)
+    styles_txt = dict(fontsize=FS_LAB, horizontalalignment="center", transform=ax.transAxes)
     if xlabel == r"$r_1$ (ms)":
         ax.set_xlim([-10**4, 10**4])
         ticks_x = ticker.FuncFormatter(lambda x, pos: f"{x / 10**4:g}")
@@ -309,9 +322,9 @@ def ax_hist(ax, arr, xlabel, density=False, logscale=False):
                 ax.text(0, 1.05, r"$\times10^{-3}$", **styles_txt)
             else:
                 ax.text(0, 1.05, r"$\times10^{-4}$", **styles_txt)
-        ax.set_ylabel("Probability Density", fontsize=11)
+        ax.set_ylabel("Probability Density", fontsize=FS_LAB)
     else:
-        ax.set_ylabel("Frequency", fontsize=11)
+        ax.set_ylabel("Frequency", fontsize=FS_LAB)
 
 
 def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
@@ -358,7 +371,7 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
     n_level = n - 1  # for (3,3,3), max CCS level is 2
     CCS_type_slice = 0
     cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:n_level], N=n_level)
-    xlabel = r"Shuffling Parameter $\beta$"
+    xlabel = r"Memory Error Parameter $\beta$"
     ylabel = "ECCS"
     if regType in [0, 1, 2, 3]:
         title = fr"ECCS of $^{regType}S_{p:d}^{n:d}$ (lv${lv + 1}$/lv${lv + 2}$)"
@@ -366,7 +379,7 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
         raise NotImplementedError(f"<regType>={regType} is invalid")
 
     if show_legend:  # only show walk length
-        styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax.transAxes)
+        styles_txt = dict(fontsize=FS_LAB, horizontalalignment="center", transform=ax.transAxes)
         n_agents = 100  # num of subjects
         n_steps = 1500  # number of steps
         topy, s = 0.94, 0.06
@@ -386,16 +399,16 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
         #     sty2.update(dict(label='Stochastic '+labels[i].replace('-','/lv')))
         kw_spt = dict(x=x, y=ECCS_arr[:, i + 1])
         ax.scatter(**kw_spt, **sty2)
-        styles_txt = dict(fontsize=11, horizontalalignment="left", transform=ax.transAxes)
-        ax.text(0.01, 0.88, f"n={kw_spt['y'].shape[0]:d}", **styles_txt)
+        styles_txt = dict(fontsize=FS_LAB, horizontalalignment="right", transform=ax.transAxes)
+        ax.text(0.97, 0.88, f"n={kw_spt['y'].shape[0]:d}", **styles_txt)
         if box_list is not None:
             bbdry, box_dict = box_list  # unpack
             bdata = [ECCS_arr[:, i + 1][box_dict[b]["mask"]] for b in box_dict if box_dict[b]["n"] != 0]
             positions = [box_dict[b]["center"] for b in box_dict if box_dict[b]["n"] != 0]
-            max_ECCS = [max(j) for j in bdata]
             if is_log:  # create a dummy axis and plot boxes on that axis
                 ax_bx = ax.twiny()  # instantiate a separate x-axis for equal spacing boxes
                 # below position kwarg are crucial steps, turn exp to linear (log scale)
+                # log width is the same for all rows, thus only using 1st row
                 widths = log_b(bbdry[0, 2], 10) - log_b(bbdry[0, 1], 10)  # full width
                 kwargs = dict(widths=widths, manage_ticks=False, whis=(2.5, 97.5))  # 95% range whisker
                 ax_bx.set_xlim(log_b(ax.get_xlim(), 10))  # s.t. box matches the scatter
@@ -404,30 +417,38 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
             else:
                 parts = ax.boxplot(bdata, positions=positions)  # incomplete but unused
             
-            if True: # match box colors to scatter
-                for pc in parts.values():
-                    for line in pc:
-                        line.set_color(cmap(i))
-                        line.set_alpha(1)
-            
+            for pc in parts.values():  # match box colors to scatter
+                for line in pc:
+                    line.set_color(cmap(i))
+                    line.set_alpha(1)
+
+            caps_lower = [parts['caps'][c]._xy[0, 1] for c in range(0, len(parts['caps']), 2)]
+            caps_upper = [parts['caps'][c]._xy[0, 1] for c in range(1, len(parts['caps']), 2)]
+
             # show Wilcoxon signed-rank tests (both per bin and global)
             # global
             diff = ECCS_arr[:, i + 1] - 1  # compared to baseline of 1
-            pval = stats.wilcoxon(diff, alternative="greater").pvalue
-            ax.text(0.01, 0.94, f"Wilcoxon {pval_star(pval, star=False)}", **styles_txt)
+            result = stats.wilcoxon(diff, alternative="greater")
+            wstat, pval = result.statistic, result.pvalue
+            print427(f"ECCS median - 1 compared to 0 (Fig.6; lv={i + 1}): ", var=f"n={len(diff)}")
+            temp_txt = f"lv={i + 1}"
+            temp_txt += f" | (Wilcoxon) stat={wstat:.2f} pval={pval:.4f}"
+            print(temp_txt)
+            ax.text(0.97, 0.94, f"Wilcoxon {pval_star(pval, star=False)}", **styles_txt)
             # pval2 = 1 - sum(diff > 0) / diff.shape[0]
             # ax.text(0.99, 0.91, f"Proportion {pval_star(pval2, star=False)}", **styles_txt)
             # ax.text(0.99, 0.91, f"Proportion p={pval2:.3f}", **styles_txt)
             # per bin
             styles_txt.pop("transform", None)
             styles_txt.update(dict(horizontalalignment="center"))
+            # show p-val (stars) and sample size per bin
             for j, a in enumerate(bdata):  # loop over each bin (beta)
                 diff = a - 1  # compared to baseline of 1
                 pval = stats.wilcoxon(diff, alternative="greater").pvalue
-                ax.text(positions[j], max_ECCS[j] + 0.005, pval_star(pval, star=True), **styles_txt)
+                ax.text(positions[j], caps_upper[j] - 0.010, pval_star(pval, star=True), **styles_txt)
                 # pval2 = 1 - sum(diff > 0) / diff.shape[0]
                 # ax.text(temp_betas[i], 0.92, pval_star(pval2, star=True), **styles_txt)
-                ax.text(positions[j], max_ECCS[j] + 0.060, f"{len(diff):d}", **styles_txt)
+                ax.text(positions[j], caps_lower[j] - 0.060, f"{len(diff):d}", **styles_txt)
             
             if yrange is not None:  # only match both lvs to a fix val if yrange is explicitly set
                 if ECCS_type == 1:
@@ -438,20 +459,11 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
                 ax.set_ylim((0.6, 1.6))
     
 
-    # def temp_b1(i):  # annotate CCS plot with maxima
-    #     return 0  # no annotation for now
-    #     xmaxs[i] = x[np.argmax(CCS_arr[:, CCS_type_slice, i])]
-    #     ymaxs[i] = np.max(CCS_arr[:, CCS_type_slice, i])
-    #     # texts[i] = f"({xmaxs[i]:.3f},{ymaxs[i]:.3f})"  # show both beta and CCS
-    #     texts[i] = f"{xmaxs[i]:.3f}"  # show only beta
-    #     kw_text.update(dict(color=cmap(i), xy=(xmaxs[i], ymaxs[i])))
-    #     kw_text.update(dict(xytext=(0.85 - i * 0.2, 0.05)))
-    #     ax.annotate(texts[i], **kw_text)
 
     # argmax = beta that maximizes CCS at different permissible levels
     arrowprops = dict(arrowstyle="simple", facecolor="grey", edgecolor="grey")
     arrowprops.update(dict(linewidth=1 / 3, alpha=0.74))
-    kw_text = dict(textcoords="axes fraction", fontsize=11, arrowprops=arrowprops)
+    kw_text = dict(textcoords="axes fraction", fontsize=FS_LAB, arrowprops=arrowprops)
     kw_text.update(dict(ha="center", va="center"))
 
     xmaxs, ymaxs, texts = [None] * (n-1), [None] * (n-1), [None] * (n-1)
@@ -463,10 +475,12 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
     # ax.set_ylim((0.9, 1.3))  # for regType=3, p=3, n=3 max ECCS is <1.3
     ax.plot(ax.get_xlim(), (1, 1), "--", color="grey", zorder=0)  # draw y=1 line in grey
 
-    ax.set_title(title, fontsize=17)
-    ax.set_xlabel(xlabel, fontsize=11)
+    ax.set_title(title, fontsize=FS_MAIN)
+    ax.set_xlabel(xlabel, fontsize=FS_LAB)
+    ax.tick_params(axis="both", which="major", **TICK_PARAMS)
+    ax.tick_params(axis="both", which="minor", **TICK_PARAMS_MINOR)
     if lv == 0:  # only show y label on lv 1 ECCS
-        ax.set_ylabel(ylabel, fontsize=11)
+        ax.set_ylabel(ylabel, fontsize=FS_LAB)
     if is_log:
         ax.set_xscale("log")  # set x to log scale
         loc="upper left"
@@ -479,7 +493,7 @@ def ax_ECCS(ax, ECCS_arr, params, box_list=None, err_type='ste', CG_lv=0,
     return xmaxs
 
 
-def get_ECCS_from_data(cwd="", plot_data=None, ECCS_type=1):
+def get_ECCS_from_data(cwd="", ECCS_type=1):
     """calculate ECCS for each subject
     process processed data (including rt_pred) and MEM results into dictionaries
 
@@ -545,115 +559,6 @@ def get_ECCS_from_data(cwd="", plot_data=None, ECCS_type=1):
 
         with open(cwd + fname, "w") as f:
             json.dump(MEM, f, indent=4)
-
-
-    if plot_data is None:  # plot none
-        plot_data = [-1]
-    else:  # set up some global params
-        txt_size = 5
-        txt_id_x, txt_id_y = (0.10, 0.94)
-        txt_beta_x, txt_beta_y = (0.50, 0.94)
-    if 1 in plot_data:  # plot emp. anticipation
-        fig = plt.figure(figsize=[20, 20])
-        for i, id in enumerate(MEM.keys()):
-            ax = fig.add_subplot(10, 10, i + 1)
-            x = [i for i in range(len(MEM[id]["ants_arr"]))]
-            ax.scatter(x, MEM[id]["ants_arr"])
-        saveNclose427(fig, "ants_arrs", dpi=300, sub_folder_name="100subs")
-
-    if 2 in plot_data:  # plot rt & rt_ro for each edgelv
-        fig2 = plt.figure(figsize=[14, 20])
-        ylabels = [r"rt (raw)", r"rt (regressed-out)"]
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:2], N=2)
-        ax1 = fig2.add_subplot(1, 2, 1)
-        ax2 = fig2.add_subplot(1, 2, 2)
-        for i, id in enumerate(MEM.keys()):
-            for j in range(2):  # 3 edgelv
-                y = [MEM[id]["rts_edgelv"][j], MEM[id]["rts_edgelv"][j + 1]]
-                color = cmap(0) if y[1] > y[0] else cmap(1)  # blue if rt increases
-                ax1.plot([1 + j, 2 + j], y, color=color)
-                y2 = [MEM[id]["rts_pred_edgelv"][j], MEM[id]["rts_pred_edgelv"][j + 1]]
-                y2 = [y[x] - y2[x] for x in range(2)]
-                color = cmap(0) if y2[1] > y2[0] else cmap(1)  # blue if rt_ro increases
-                ax2.plot([1 + j, 2 + j], y2, color=color)
-
-        for i, ax in enumerate([ax1, ax2]):
-            ax.set_xticks([1, 2, 3])
-            ax.set_xlabel(r"edgelv", fontsize=11)
-            ax.set_ylabel(ylabels[i], fontsize=11)
-        saveNclose427(fig2, "rts_edgelv", dpi=300, sub_folder_name="100subs")
-
-    if 3 in plot_data:
-        fig3 = plt.figure(figsize=[14, 14])  # plot rt for each theo. anticipation
-        fig4 = plt.figure(figsize=[14, 14])  # plot rt_ro for each theo. anticipation
-        A = make_SierpinskiGraph427(3, 3, norm=True, regType=3, use_set=False)["A"]
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:2], N=2)
-        kwargs_style = dict(s=7)
-        for i, id in enumerate(MEM.keys()):
-            Ahat = make_A_hat_beta(A, MEM[id]["beta"], CG_lv=0, tup=None)
-            x = [Ahat[e[0], e[1]] for e in MEM[id]["edges_arr"]]
-
-            ax1 = fig3.add_subplot(10, 10, 1 + i)
-            ax1.scatter(x, MEM[id]["rts_arr"], **kwargs_style)
-
-            ax2 = fig4.add_subplot(10, 10, 1 + i)
-            y = [
-                MEM[id]["rts_arr"][x] - MEM[id]["rts_pred_arr"][x]
-                for x in range(len(MEM[id]["edges_arr"]))
-            ]
-            ax2.scatter(x, y, **kwargs_style)
-            for ax in [ax1, ax2]:
-                styles_txt = dict(fontsize=txt_size, horizontalalignment="center", transform=ax.transAxes)
-                ax.text(txt_beta_x, txt_beta_y, fr"$\beta$: {MEM[id]['beta']:.3f}", **styles_txt)
-                ax.text(txt_id_x, txt_id_y, f"id: {id:d}", **styles_txt)
-                ax.tick_params(axis="both", which="major", labelsize=txt_size)
-
-        saveNclose427(fig3, "rts_theo-ants", dpi=300, sub_folder_name="100subs")
-    if 4 in plot_data:
-        saveNclose427(fig4, "rts_ro_theo-ants", dpi=300, sub_folder_name="100subs")
-
-    if 5 in plot_data:  # plot rt_ro for each theo. anticipation at different betas & linear reg
-        sub_ids = [1, 2, 4, 5, 7, 10, 123]  # choose what subject to plot
-        betas = np.geomspace(0.0001, 10, 40)
-        A = make_SierpinskiGraph427(3, 3, norm=True, regType=3, use_set=False)["A"]
-        colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
-        cmap = LinearSegmentedColormap.from_list("custom edge color", colors[:2], N=2)
-        kwargs_style = dict(s=7)
-        for id in sub_ids:
-            fig5 = plt.figure(figsize=[20, 7])
-            y = [
-                MEM[id]["rts_arr"][x] - MEM[id]["rts_pred_arr"][x]
-                for x in range(len(MEM[id]["edges_arr"]))
-            ]
-            res_list = [None] * len(betas)
-            for i, beta in enumerate(betas):
-                if i == 0:  # first beta uses fitted beta instead
-                    beta = MEM[id]["beta"]
-                Ahat = make_A_hat_beta(A, beta, CG_lv=0, tup=None)
-                x = [Ahat[e[0], e[1]] for e in MEM[id]["edges_arr"]]
-                res = smf.ols("y ~ x", data=dict(x=x, y=y)).fit()  # simplest linear regression
-                pred_ols = res.get_prediction()
-                res_list[i] = (i, x, beta, res, pred_ols, np.sqrt(res.ssr/len(x)))
-            res_list = sorted(res_list, key=lambda x:[x[-1], x[2]], reverse=True)
-            for i, tup in enumerate(res_list):
-                j, x, beta, res, pred_ols, gof = tup  # unpack
-                ax = fig5.add_subplot(4, 10, 1 + i)
-                styles_txt = dict(fontsize=txt_size, horizontalalignment="center", transform=ax.transAxes)
-                ax.scatter(x, y, **kwargs_style)
-                temp_str = "r" if j != 0 else "k"
-                ax.plot(x, res.fittedvalues, f"{temp_str}-")
-                ax.plot(x, pred_ols.summary_frame()["obs_ci_upper"], f"{temp_str}--")
-                ax.plot(x, pred_ols.summary_frame()["obs_ci_lower"], f"{temp_str}--")
-                ax.tick_params(axis="both", which="major", labelsize=txt_size)
-                ax.text(txt_beta_x, txt_beta_y, fr"$\beta$: {beta:.3f}", **styles_txt)
-                ax.text(txt_id_x, txt_id_y, f"id: {id:d}", **styles_txt)
-                ax.text(0.85, txt_beta_y, fr"RMSE: {gof:.3f}", **styles_txt)
-                ax.text(txt_id_x + 0.05, 0.12, fr"$p_0$: {res.pvalues['Intercept']:.3f}", **styles_txt)
-                ax.text(txt_id_x + 0.05, 0.05, fr"$p_1$: {res.pvalues['x']:.3f}", **styles_txt)
-            saveNclose427(fig5, f"rts_ro_theo-ants_betas_id={id}", dpi=300, sub_folder_name="100subs")
-    
 
 
     return MEM
@@ -752,10 +657,10 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     temp_median4 = np.median(beta_arr_filt[:, 1])
 
     ax1, ax2 = axes  # unpack
-    styles_txt = dict(fontsize=11, horizontalalignment="center", transform=ax1.transAxes)
+    styles_txt = dict(fontsize=FS_LAB, horizontalalignment="center", transform=ax1.transAxes)
     if show_full:
         ax1.scatter(beta_arr[:, 1], beta_arr[:, 0])
-        ax1.set_title(r"$\beta$: network vs. n-back", fontsize=17)
+        ax1.set_title(r"$\beta$: network vs. n-back", fontsize=FS_MAIN)
         ax1.text(0.8, 0.90, f"$n={beta_arr.shape[0]:d}$", **styles_txt)
         ax1.text(0.6, 0.85, f"median={temp_median1:.3f} (network) | {temp_median2:.3f} (n-back)", **styles_txt)
     else:
@@ -763,14 +668,14 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
         ax1.scatter(range(beta_arr_filt.shape[0]), beta_diff)
         ax1.plot(ax1.get_xlim(), [0] * 2, "--", zorder=0, color="grey")  # draw line
         text_gof2 = "" if gof_thres is None else fr"; gof$\geq${gof_thres:.2f}"
-        ax1.set_title(fr"$\beta$: n-back - network ({txt_beta_arr}{text_gof2})", fontsize=17)
+        ax1.set_title(fr"$\beta$: n-back - network ({txt_beta_arr}{text_gof2})", fontsize=FS_MAIN)
         # ax1.text(0.8, 0.95, f"$r_s={spearmanr.correlation:.3f}$, $p={spearmanr.pvalue:.3f}$", **styles_txt)
         ax1.text(0.8, 0.90, f"$n={beta_arr_filt.shape[0]:d}$", **styles_txt)
         ax1.text(0.8, 0.85, f"mean={np.mean(beta_diff):.3f} (diff)", **styles_txt)
         ax1.text(0.8, 0.80, f"median={np.median(beta_diff):.3f} (diff)", **styles_txt)
 
     ax2.scatter(beta_arr_filt[:, 1], beta_arr_filt[:, 0])
-    ax2.set_title(fr"$\beta$: network vs. n-back ({txt_beta_arr}{text_gof2})", fontsize=17)
+    ax2.set_title(fr"$\beta$: network vs. n-back ({txt_beta_arr}{text_gof2})", fontsize=FS_MAIN)
     styles_txt.update(dict(transform=ax2.transAxes))
     ax2.text(0.8, 0.95, f"$r_s={spearmanr.correlation:.3f}$, $p={spearmanr.pvalue:.3f}$", **styles_txt)
     ax2.text(0.8, 0.90, f"$n={beta_arr_filt.shape[0]:d}$", **styles_txt)
@@ -778,11 +683,11 @@ def get_process_beta_2src(cwd="", nback_idx=1, gof_thres=0.80):
     ax2.text(0.6, 0.80, f"median={temp_median3:.3f} (network) | {temp_median4:.3f} (n-back)", **styles_txt)
 
     for ax in axes:
-        ax.set_xlabel(r"n-back $\beta$", fontsize=11)
-        ax.set_ylabel(r"network $\beta$", fontsize=11)
+        ax.set_xlabel(r"n-back $\beta$", fontsize=FS_LAB)
+        ax.set_ylabel(r"network $\beta$", fontsize=FS_LAB)
     if not show_full:
-        axes[0].set_xlabel("index", fontsize=11)
-        axes[0].set_ylabel(r"difference in $\beta$", fontsize=11)
+        axes[0].set_xlabel("index", fontsize=FS_LAB)
+        axes[0].set_ylabel(r"difference in $\beta$", fontsize=FS_LAB)
     saveNclose427(fig, f"beta_arr_{txt_beta_arr}_gofgeq-{text_gof1}", dpi=300, sub_folder_name="100subs\\betas")
 
 
@@ -857,12 +762,32 @@ def ECCS1(df):
     return eccs, ants_arr, rts_arr, rts_edgelv, rts_pred_arr, rts_pred_edgelv, edges_arr
 
 
-def ECCS2(df, df_MC):
+def ECCS2(df, df_MC, alt=None):
     """df should come from groupby(level="id")
     df should have fields: "node", "node_prev", "edgelv"
     df_MC should have fields: "M_1", ..., "M_1000"
     even though this requires two inputs, it actually is simpler than ECCS1,
     because heavy-lifting was done in the max entropy model param fitting process
+
+    Kwargs
+    ------
+    - alt (bool): alternative ECCS definition
+        only p=3, n=3, regularization shouldn't matter but self-loop is one we do on
+        unlike all CCS/ECCS definitions we have thus far,
+        this alt version removes some edges (as opposed to using all or almost all)
+        it removes immediate neighboring edges for both x-1,x and x,x+1 CCS
+        lv1 edges: for s in {0,1,2}, keep only edges w/ sij nodes where i=j
+        lv2 edges: similar to lv1, but alternatively,
+        we could remove edges w/ nodes whose digits are all unique (i.e., permutation of 0,1,2)
+        commom pattern: remove edges whose both nodes do not have repeating digits w/in level
+        the sub-str we consider the pattern in has length lv+1;
+        for lv1 edges, we look at 2 digits from the right
+        for lv2 edges, we look at 3 digits from the right
+        e.g., 201-210, 202-220, 220-221, 201-202 (first two are lv2, second two are lv1)
+        remove 201-210: both nodes contain non-repeating digits
+        keep 202-220: both repeat "2"
+        remove 220-221: "20" and "21" contain non-repeating digits
+        remove 201-202: "01" and "02" contain non-repeating digits
 
     Intermediary
     ------------
@@ -882,6 +807,8 @@ def ECCS2(df, df_MC):
     ants_arr (list): last mental count for each edge (sorted by level, ascending order)
     edges_arr (list): list of len-2 lists; NOTE the list is ordered (frozenset -> list)
     """
+    if alt is None:
+        alt = ALT  # global param, see top of the script
     ants = dict()
     edgelvs = dict()
     n = len(df)
@@ -927,9 +854,22 @@ def ECCS2(df, df_MC):
     lv_arr = sorted([x for x in edgelvs if x >= 1])  # 1,2,...,lv_max
     edges_arr = [list(e) for lv in lv_arr for e in edgelvs[lv]]  # s.t. edge is subscriptable
     mean_weights = [0.0 for _ in range(lv_arr[-1])]
-    for lv in lv_arr:
-        # mean_weights[lv - 1] = np.mean([ants[e] for e in edgelvs[lv]])  # unnormalized
-        mean_weights[lv - 1] = np.mean([W[e[0],e[1]] for e in edgelvs_l[lv]])
+    if not alt:
+        for lv in lv_arr:
+            # mean_weights[lv - 1] = np.mean([ants[e] for e in edgelvs[lv]])  # unnormalized
+            mean_weights[lv - 1] = np.mean([W[e[0],e[1]] for e in edgelvs_l[lv]])
+    else:
+        def temp_r(node, lv):  # check if node has repeating digits
+            digits = p_ary(node, 3)[::-1][:(lv+1)]  # assume p=3; invert it and sub-str it
+            return len(set(digits)) != len(digits)
+        for lv in lv_arr:
+            if lv in [1, 2]:  # currently only works for n=3, p=3, so only 1, 2 are used
+                _edges = [
+                    W[e[0], e[1]] for e in edgelvs_l[lv] if (temp_r(e[0], lv) or temp_r(e[1], lv))
+                ]
+            else:
+                _edges = [W[e[0],e[1]] for e in edgelvs_l[lv]]
+            mean_weights[lv - 1] = np.mean(_edges)
 
     eccs = list(np.divide(mean_weights[:-1], mean_weights[1:]))  # calculate ECCS2
     # turn ants into a sorted list

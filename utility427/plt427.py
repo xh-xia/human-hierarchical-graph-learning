@@ -1,7 +1,7 @@
 """
 matplotlib helper functions
 
-Created: Wednesday, ‎June ‎9, ‎2021, ‏‎8:51:14 AM (EDT)
+Created: Wednesday, June 9, 2021, 8:51:14 AM (EDT)
 @author: Xiaohuan (Pixel) X.
 """
 
@@ -88,7 +88,7 @@ def colors_selector(str=None, reverse=True):
     return colors[::-1] if reverse else colors
 
 
-def cbrLabel427(cax, title):
+def cbrLabel427(cax, title, fontsize=14):
     """
     set colorbar label to the left, vertically
     cbm.set_label() is the "vanilla"
@@ -103,7 +103,7 @@ def cbrLabel427(cax, title):
         "transform": cax.transAxes,
         "verticalalignment": "center",
         "horizontalalignment": "center",
-        "fontsize": 11,
+        "fontsize": fontsize,
         "rotation": "vertical",
     }
     cax.text(-0.9, 0.5, title, **kwargs)
