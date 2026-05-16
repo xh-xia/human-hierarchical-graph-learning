@@ -1,12 +1,17 @@
-# GLEXP427
-Graph learning experiment notes and such.
+# Human learning of hierarchical graphs
+
+corresponding paper DOI: https://doi.org/10.1103/PhysRevE.109.044305
+
+Below are Graph learning experiment notes.
 
 # Prerequisites
 
 ## nvm install & such
+
 #local dependencies installed on MacOS
+
 ```bash
-SEASNet-14-49:~ pixel$ nvm install
+nvm install
 No .nvmrc file found
 
 Node Version Manager
@@ -106,28 +111,44 @@ npm install --save-dev web pack-cli
 ```
 
 ## python 3 & PsyTurk
+
 ### experiment file dir (MSLTM dir)
-/Users/pixel/Documents/GLexp/mturk-statistical-learning-task-master
+
+/Users/username/Documents/GLexp/mturk-statistical-learning-task-master
+
 ### venv dir
-/Users/pixel/Documents/GLexp/psiturk
+
+/Users/username/Documents/GLexp/psiturk
+
 ### make venv (using Python3 because 2 doesn't have venv)
-python3 -m venv /Users/pixel/Documents/GLexp/psiturk
+
+python3 -m venv /Users/username/Documents/GLexp/psiturk
+
 ### activate it
-source /Users/pixel/Documents/GLexp/psiturk/bin/activate
+
+source /Users/username/Documents/GLexp/psiturk/bin/activate
+
 ### install packages
+
 pip install pandas networkx ipython bctpy
 
 ### Homebrew installing permissions:
+
 (stackoverflow.com/questions/9800527)
 #check permissions:
 ls -ld /usr/local/Cellar
+
 ### change permission
+
 sudo chgrp -R admin /usr/local/Cellar
+
 ### open it up
+
 sudo chmod a+w /usr/local/Cellar
 
 change ownership and permissions:
 (bash)
+
 ```bash
 You should probably change the ownership and permissions of /usr/local
 back to your user account.
@@ -135,25 +156,29 @@ sudo chown -R $(whoami):admin /usr/local
 ```
 
 # Piloting & Testing (editing files in MSLTM dir)
+
 ## Sandbox mode & Live mode
+
 ### Sandbox (psiturk or Mturk): locally or Haroku
+
 home for database (where db is hosted): local (debugging), or Haroku (piloting, and formal run)
 API: psiturk (for experimenter) or MTurk (participants will see)
 HIT: MTurk; task to be put on MTurk
 
-1) local sandbox HIT
-2) Haroku sandbox HIT
-3) Haroku live HIT
+1. local sandbox HIT
+2. Haroku sandbox HIT
+3. Haroku live HIT
 
 3 in common: task.js, custom.py
 
 [config.txt] - database
-1) change where we host database:
+
+1. change where we host database:
 
 - edit experiment/config.txt: edit database_url (where we store the data).
   comment out line 17; uncomment line 18.
 
-[setup_db.py] - 
+[setup_db.py] -
 python3 setup_db.py
 (make sure there is the correct subjects.csv.gz, because .py is writing from it to participants.db.)
 
@@ -164,11 +189,12 @@ python3 setup_db.py
 (need to include AWS Access credentials in config.txt)
 
 (in bash)
+
 ```bash
 npm install (once?)
 
-source /Users/pixel/Documents/GLexp/psiturk2/bin/activate
-cd /Users/pixel/Documents/GLexp/mturk-graph-learning-427-master427/experiment
+source /Users/username/Documents/GLexp/psiturk2/bin/activate
+cd /Users/username/Documents/GLexp/mturk-graph-learning-427-master427/experiment
 # below two lines enable npm command
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
@@ -176,6 +202,7 @@ npm run gulp #this updates task.js
 psiturk
 hit create
 ```
+
 ("num of participants?") 1
 
 ("reward") 1.00
@@ -185,10 +212,10 @@ hit create
 (URL: experiment!)
 
 kill psiturk progress (if server is in blocked status):
+
 ```bash
 pkill -f psiturk
 ```
-
 
 To work locally: PsiTurk debugging in sandbox mode:
 (bash)
@@ -202,7 +229,7 @@ custom_models.py & config.txt: change the tablename to something like name_427
 then:
 reset_db.py: change the name of tables to the ones in custom_models.py & config.txt.
 setup_db.py: now we can have raise Exception('Database is not empty!') since if reset_db, db will be empty.
-  there may be a thing called schema that limits the change we have on tables.
+there may be a thing called schema that limits the change we have on tables.
 
 [heroku debugging]
 Error R10 (Boot timeout): tried to launch app, but failed in 3 min or something, it will kill the process.
@@ -211,12 +238,13 @@ database on heroku:
 [bash]
 heroku pg:psql
 \dt # show database table
-SELECT * FROM [table name] # look at specific table
+SELECT \* FROM [table name] # look at specific table
 
 debug on heroku but environment (step-by-step: (heroku exact is for online)
 heroku run bash # heroku.py script is not run, just set up environment
 ls
 cd ./experiment
+
 1. python -i custom.py # in python environment
 2. psiturk
    server on
